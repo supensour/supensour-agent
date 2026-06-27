@@ -23,6 +23,19 @@ All skills are language-agnostic and extensible via parameters (`--lang`,
 
 Skills then appear as `supensour:review-code` and `supensour:create-tests`.
 
+### Update
+
+Pull the latest version after changes are pushed to the repo:
+
+```
+/plugin marketplace update supensour-agent
+/reload-plugins
+/reload-skills
+```
+
+This re-syncs the marketplace from the repo's default branch (`master`). Restart the session (or
+re-run `/plugin install`) if a skill's metadata changed.
+
 ## Layout
 
 ```
