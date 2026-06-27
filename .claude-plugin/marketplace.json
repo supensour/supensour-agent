@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "supensour-agent",
+  "name": "supensour",
   "description": "Supensour AI agent skills for software-development workflows.",
   "owner": { 
     "name": "supensour", 
