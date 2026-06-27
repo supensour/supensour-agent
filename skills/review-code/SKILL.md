@@ -33,7 +33,7 @@ Code review skill. Reviews diffs like a 10-year architect — security, architec
 | `--branch <branch>` | current branch | Source branch to review. Its open PR/MR is located and reviewed |
 | `--push` | off | Post findings as PR comments now. If PR/MR/token unavailable, falls back to saved local copy |
 | `--push-saved [path]` | off | Push previously saved local review to PR/MR. No path → latest saved review for `SRC` (`--branch` or current) |
-| `--platform <key>` | auto | Platform key from `~/.claude/config/supensour.yaml` |
+| `--platform <key>` | auto | Platform key from `~/.supensour/config/supensour.yaml` |
 | `--base <branch>` | auto-detect | Base branch to diff against |
 | `--files <glob>` | all changed | Scope review to matching paths |
 | `--severity <list>` | all | Filter: `critical`, `high`, `medium`, `low`, `info` |
@@ -97,7 +97,7 @@ WT="$(bash "<skill-dir>/scripts/worktree.sh" ensure "$SRC")"   # prints worktree
 0. **Resolve source branch** `SRC` — `--branch` flag if provided, else current branch (`git rev-parse --abbrev-ref HEAD`). If `--branch` given but no such branch exists locally or on remote, error and exit.
 0b. **Ensure config exists** — create any missing config from a template (idempotent):
    ```bash
-   bash "<skill-dir>/scripts/init-config.sh"   # creates ~/.claude/config/supensour.yaml + <repo>/.supensour/config/config.yaml if absent
+   bash "<skill-dir>/scripts/init-config.sh"   # creates ~/.supensour/config/supensour.yaml + <repo>/.supensour/config/config.yaml if absent
    ```
    Prints `📝 Created …` for each file it writes (global catalog is prefilled from the detected remote; review/edit host + token_env).
 1. **Resolve platform + PR/MR + base** with the scripts (sequential — each needs the prior):

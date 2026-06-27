@@ -107,7 +107,7 @@ ensure_project_config() {
 # yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
 # Supensour per-repo hints (optional). Uncomment + set to skip detection.
 git:
-  # platform: gitlab-ce          # key into ~/.claude/config/supensour.yaml platforms
+  # platform: gitlab-ce          # key into ~/.supensour/config/supensour.yaml platforms
   # token_env: GITLAB_TOKEN      # override the platform's token_env for this repo
   # base_branch: develop         # default diff base
 project:

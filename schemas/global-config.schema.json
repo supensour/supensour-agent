@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/global-config.schema.json",
   "title": "Supensour global config",
-  "description": "~/.claude/config/supensour.yaml — platform catalog shared across supensour skills.",
+  "description": "~/.supensour/config/supensour.yaml — platform catalog shared across supensour skills.",
   "type": "object",
   "required": ["platform"],
   "additionalProperties": false,

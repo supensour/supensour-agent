@@ -45,7 +45,7 @@ skills/<skill>/        SKILL.md + rules/ + templates/
 
 ## Configuration
 
-**Global platform catalog** — `~/.claude/config/supensour.yaml` (lists the git platforms skills can use):
+**Global platform catalog** — `~/.supensour/config/supensour.yaml` (lists the git platforms skills can use):
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/global-config.schema.json

@@ -6,7 +6,7 @@
 # identity, and dispatch to the matched platform lib.
 #
 # Config:
-#   - Global  ~/.claude/config/supensour.yaml      → platform catalog (default + platforms).
+#   - Global  ~/.supensour/config/supensour.yaml   → platform catalog (default + platforms).
 #   - Project <repo>/.supensour/config/config.yaml → per-repo hints to skip detection:
 #       git.platform, git.token_env, git.base_branch, project.language.
 # Platform precedence: --platform flag > project git.platform > global `default` > auto-detect.
@@ -52,9 +52,9 @@ _body() { sed '$d'; }
 _code() { tail -n1; }
 
 # --- Config files -----------------------------------------------------------
-# Global: ~/.claude/config/supensour.yaml
+# Global: ~/.supensour/config/supensour.yaml (AI-agnostic, not Claude-specific).
 cfg_file() {
-  [ -f "$HOME/.claude/config/supensour.yaml" ] && { printf '%s' "$HOME/.claude/config/supensour.yaml"; return 0; }
+  [ -f "$HOME/.supensour/config/supensour.yaml" ] && { printf '%s' "$HOME/.supensour/config/supensour.yaml"; return 0; }
   return 1
 }
 
@@ -154,7 +154,7 @@ init_platform() {
 
   # Fall back to auto-detect from the remote URL when type still unknown.
   [ -z "${PLATFORM_TYPE:-}" ] && PLATFORM_TYPE="$(_autodetect_type)"
-  [ -z "${PLATFORM_TYPE:-}" ] && die "Cannot resolve platform. Set --platform, configure ~/.claude/config/supensour.yaml, or add .supensour/config/config.yaml."
+  [ -z "${PLATFORM_TYPE:-}" ] && die "Cannot resolve platform. Set --platform, configure ~/.supensour/config/supensour.yaml, or add .supensour/config/config.yaml."
 
   # Project git.token_env overrides the platform's token_env for this repo.
   [ -n "$proj_token_env" ] && TOKEN_ENV="$proj_token_env"
@@ -233,9 +233,9 @@ _token_env_for_type() {
   case "$1" in gitlab) printf 'GITLAB_TOKEN' ;; bitbucket) printf 'BITBUCKET_TOKEN' ;; *) printf 'GITHUB_TOKEN' ;; esac
 }
 
-# ensure_global_config — create ~/.claude/config/supensour.yaml if absent (prefilled from the remote).
+# ensure_global_config — create ~/.supensour/config/supensour.yaml if absent (prefilled from the remote).
 ensure_global_config() {
-  local f="$HOME/.claude/config/supensour.yaml"
+  local f="$HOME/.supensour/config/supensour.yaml"
   [ -f "$f" ] && return 0
   local type host key tenv
   type="$(_autodetect_type)"; [ -z "$type" ] && type="github"
@@ -267,7 +267,7 @@ ensure_project_config() {
 # yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
 # Supensour per-repo hints (optional). Uncomment + set to skip detection.
 git:
-  # platform: gitlab-ce          # key into ~/.claude/config/supensour.yaml platforms
+  # platform: gitlab-ce          # key into ~/.supensour/config/supensour.yaml platforms
   # token_env: GITLAB_TOKEN      # override the platform's token_env for this repo
   # base_branch: develop         # default diff base
 project:

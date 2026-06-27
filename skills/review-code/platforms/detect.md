@@ -11,7 +11,7 @@ bash "$SKILL_DIR/scripts/detect-platform.sh" [--platform <key>]
 
 ## Config files
 
-- **Global catalog** — `~/.claude/config/supensour.yaml`: top-level `platform:` holding `default` +
+- **Global catalog** — `~/.supensour/config/supensour.yaml`: top-level `platform:` holding `default` +
   `platforms:` (key → definition). Per platform: `type`, `host`, `api_version`, `token_env`
   (+ `token_env_alternatives` block list), `cli`. Schema: `schemas/global-config.schema.json`.
   ```yaml
