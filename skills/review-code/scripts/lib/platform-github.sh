@@ -24,15 +24,15 @@ _gh_api() {
 }
 
 # github_fetch_pr <SRC> → JSON array of ALL open PRs for the branch ([] if none).
-#   [{number,url,title,base}, ...]
+#   [{number,url,title,source,base}, ...]   (source = head branch, base = target branch)
 github_fetch_pr() {
   local src="$1"
   if [ -n "${TOKEN:-}" ]; then
     _gh_api GET "/repos/$OWNER/$REPO/pulls?head=$OWNER:$src&state=open" | _body \
-      | jq -c 'if type=="array" then map({number, url:.html_url, title, base:.base.ref}) else [] end' 2>/dev/null || printf '[]'
+      | jq -c 'if type=="array" then map({number, url:.html_url, title, source:.head.ref, base:.base.ref}) else [] end' 2>/dev/null || printf '[]'
   elif command -v gh >/dev/null 2>&1; then
-    gh pr list --head "$src" --state open --json number,url,title,baseRefName 2>/dev/null \
-      | jq -c 'map({number, url, title, base:.baseRefName})' 2>/dev/null || printf '[]'
+    gh pr list --head "$src" --state open --json number,url,title,headRefName,baseRefName 2>/dev/null \
+      | jq -c 'map({number, url, title, source:.headRefName, base:.baseRefName})' 2>/dev/null || printf '[]'
   else
     printf '[]'
   fi

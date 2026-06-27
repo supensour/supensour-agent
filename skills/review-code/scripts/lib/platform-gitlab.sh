@@ -20,7 +20,7 @@ _gl_api() {
 gitlab_fetch_pr() {
   local src="$1"
   _gl_api GET "/merge_requests?source_branch=$src&state=opened" | _body \
-    | jq -c 'if type=="array" then map({number:.iid, url:.web_url, title, base:.target_branch}) else [] end' 2>/dev/null || printf '[]'
+    | jq -c 'if type=="array" then map({number:.iid, url:.web_url, title, source:.source_branch, base:.target_branch}) else [] end' 2>/dev/null || printf '[]'
 }
 
 # Cache MR diff refs (base/head/start sha) needed for inline discussion positions.

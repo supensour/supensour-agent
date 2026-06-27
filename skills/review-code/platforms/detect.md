@@ -72,8 +72,9 @@ Use them to skip detection: base-branch priority becomes `--base` → project `g
 ## PR/MR detection
 
 `scripts/fetch-pull-request.sh --branch <SRC>` finds **all** open PR/MRs whose **source branch = SRC** and
-prints a JSON array `[{number, url, title, base}, ...]` (`[]` if none; the skill asks the user to pick
-when more than one). Per-platform queries live in `lib/platform-*.sh`
+prints a JSON array `[{number, url, title, source, base}, ...]` (`source` = source branch, `base` =
+target branch; `[]` if none; the skill asks the user to pick when more than one). Per-platform queries
+live in `lib/platform-*.sh`
 (`*_fetch_pr`): GitHub `pulls?head=owner:SRC&state=open`, GitLab
 `merge_requests?source_branch=SRC&state=opened`, Bitbucket `pullrequests?q=source.branch.name=...`.
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # fetch-pull-request.sh --branch <SRC> [--platform <key>]
 # Finds ALL open PR/MRs whose SOURCE branch is <SRC>; prints a JSON array (one line):
-#   [{"number","url","title","base"}, ...]   ([] if none / no token)
+#   [{"number","url","title","source","base"}, ...]   ([] if none / no token)
+#   source = source/head branch, base = target branch
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
