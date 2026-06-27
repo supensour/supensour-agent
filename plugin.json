@@ -1,0 +1,5 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "supensour",
+  "description": "Generic, parameterized software-development workflow skills (code review, test generation). Language-agnostic and extensible."
+}
