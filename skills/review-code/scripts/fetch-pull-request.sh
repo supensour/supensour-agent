@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fetch-pull-request.sh --branch <SRC> [--platform <key>]
-# Finds the open PR/MR whose SOURCE branch is <SRC> and prints it as one JSON line:
-#   {"number","url","title","base"}   (empty object {} if none / no token)
+# Finds ALL open PR/MRs whose SOURCE branch is <SRC>; prints a JSON array (one line):
+#   [{"number","url","title","base"}, ...]   ([] if none / no token)
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
@@ -17,4 +17,4 @@ done
 
 init_platform "$OVERRIDE"
 result="$(platform_dispatch fetch_pr "$SRC" 2>/dev/null || true)"
-printf '%s\n' "${result:-{\}}"
+printf '%s\n' "${result:-[]}"

@@ -18,14 +18,15 @@ _bb_api() {
     "$@" "$(_bb_base)$path"
 }
 
+# bitbucket_fetch_pr <SRC> → JSON array of ALL open PRs for the branch ([] if none).
 bitbucket_fetch_pr() {
   local src="$1"
   if _bb_is_server; then
     _bb_api GET "/pull-requests?at=refs/heads/$src&direction=OUTGOING&state=OPEN" | _body \
-      | jq -c '(.values[0]//{}) | select(.id) | {number:.id, url:(.links.self[0].href), title, base:.toRef.displayId}' 2>/dev/null || true
+      | jq -c '(.values // []) | map({number:.id, url:(.links.self[0].href), title, base:.toRef.displayId})' 2>/dev/null || printf '[]'
   else
     _bb_api GET "/pullrequests?q=source.branch.name=%22$src%22&state=OPEN" | _body \
-      | jq -c '(.values[0]//{}) | select(.id) | {number:.id, url:(.links.html.href), title, base:.destination.branch.name}' 2>/dev/null || true
+      | jq -c '(.values // []) | map({number:.id, url:(.links.html.href), title, base:.destination.branch.name})' 2>/dev/null || printf '[]'
   fi
 }
 

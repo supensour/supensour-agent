@@ -23,19 +23,19 @@ _gh_api() {
     "$@" "$(_gh_base)$path"
 }
 
-# github_fetch_pr <SRC> → {number,url,title,base} or empty if none.
+# github_fetch_pr <SRC> → JSON array of ALL open PRs for the branch ([] if none).
+#   [{number,url,title,base}, ...]
 github_fetch_pr() {
-  local src="$1" resp
+  local src="$1"
   if [ -n "${TOKEN:-}" ]; then
-    resp="$(_gh_api GET "/repos/$OWNER/$REPO/pulls?head=$OWNER:$src&state=open" | _body)"
+    _gh_api GET "/repos/$OWNER/$REPO/pulls?head=$OWNER:$src&state=open" | _body \
+      | jq -c 'if type=="array" then map({number, url:.html_url, title, base:.base.ref}) else [] end' 2>/dev/null || printf '[]'
   elif command -v gh >/dev/null 2>&1; then
-    resp="$(gh pr list --head "$src" --state open --json number,url,title,baseRefName 2>/dev/null \
-            | jq 'map({number, url, title, base:.baseRefName})')"
+    gh pr list --head "$src" --state open --json number,url,title,baseRefName 2>/dev/null \
+      | jq -c 'map({number, url, title, base:.baseRefName})' 2>/dev/null || printf '[]'
+  else
+    printf '[]'
   fi
-  printf '%s' "${resp:-[]}" | jq -c 'if type=="array" then (.[0]//{}) else . end
-    | if .baseRefName then {number, url:(.url//.html_url), title, base:.baseRefName}
-      else {number, url:(.html_url//.url), title, base:(.base.ref//.base)} end
-    | select(.number)' 2>/dev/null || true
 }
 
 # github_post_summary <pr> <body> → posts a PR-level (issue) comment. Prints url.
