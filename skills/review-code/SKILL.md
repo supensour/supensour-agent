@@ -1,7 +1,7 @@
 ---
 name: review-code
 description: Architect-level code review of a branch/PR diff across languages (Vue, Spring Boot, extensible). Reviews security, architecture, performance, quality, business/financial impact, and test gaps. Diff-scoped by default. Outputs a local report and optionally posts inline comments to GitHub/GitLab CE/Bitbucket PRs (pruning its own prior comments first). Use for "review this PR/MR", "review my diff", "code review before merge".
-argument-hint: "[--branch <branch>] [--push] [--push-saved [path]] [--platform <key>] [--base <branch>] [--files <glob>] [--severity <list>] [--lang <key>] [--scope diff|project]"
+argument-hint: "[--branch <branch>] [--push] [--push-saved <path>] [--platform <key>] [--base <branch>] [--files <glob>] [--severity <list>] [--lang <key>] [--scope diff|project]"
 allowed-tools: Read, Grep, Glob, Bash, WebFetch, AskUserQuestion, Agent
 ---
 
@@ -210,6 +210,9 @@ Always save the review to disk so it survives a missing PR/MR and can be pushed 
 - JSON holds each finding `{severity, file, line, dimension, title, problem, impact, fix, test_suggestion}` plus `{base, head_sha, branch, platform, worktree}` metadata so a later push maps comments to the right lines.
 - Add `.supensour/review-code/` to `.gitignore` if not present (ignores reviews + worktrees; keeps `.supensour/config/` committable).
 - Print: `💾 Saved review to .supensour/review-code/<branch>/comments/<timestamp>.md`.
+- **If the review was not pushed** (default run without `--push`, or `--push` skipped because no PR/MR
+  or token), also print how to post it later:
+  `↪ Not posted. To push to the PR/MR later: /review-code --push-saved` (uses the latest saved review for this branch).
 
 ### Step 5 — PR commenting
 

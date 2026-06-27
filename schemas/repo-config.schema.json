@@ -11,6 +11,11 @@
       "type": "string",
       "description": "Watermark text for skill output. Placeholders: {skillName}."
     },
+    "watermark_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "In markdown contexts (.md report + PR/MR comments), {skillName} renders as a link to this URL. Console output stays plain. Per-skill `watermark_url` overrides this."
+    },
     "author": {
       "type": "string",
       "description": "Attribution author (e.g. Java @author tag). Per-skill `author` overrides this."
@@ -25,6 +30,11 @@
           "watermark_template": {
             "type": "string",
             "description": "Overrides the top-level watermark_template for this skill."
+          },
+          "watermark_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Overrides the top-level watermark_url for this skill."
           },
           "author": {
             "type": "string",

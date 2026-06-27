@@ -78,14 +78,17 @@ shown on skill output (PR/MR comments, generated tests, local report, console):
 
 ```yaml
 watermark_template: "Generated with skill {skillName} · suprayan@supensour · github.com/supensour/supensour-agent"
+watermark_url: "https://github.com/supensour/supensour-agent"   # {skillName} link target in markdown
 skills:           # optional per-skill overrides (future config lives here too)
   review-code:
     # watermark_template: "Reviewed by {skillName} · suprayan@supensour"
+    # watermark_url: "https://github.com/supensour/supensour-agent/tree/master/skills/review-code"
   create-tests:
 ```
 
-Resolution: `skills.<skill>.watermark_template` > top-level `watermark_template` > built-in default.
-`{skillName}` → e.g. `supensour:review-code`.
+Resolution (each key independently): `skills.<skill>.<key>` > top-level `<key>` > built-in default.
+`{skillName}` → e.g. `supensour:review-code`. In markdown output (the `.md` report + PR/MR comments),
+`{skillName}` renders as a link to `watermark_url`; the console banner stays plain text.
 
 Skills resolve this file via `$SKILL_DIR/../../supensour-config.yaml`. Plugin installs preserve the
 dir structure, so it still resolves from the installed location.

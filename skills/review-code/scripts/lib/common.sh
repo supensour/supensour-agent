@@ -20,17 +20,20 @@
 MARKER="<!-- supensour:review-code -->"
 
 # Visible attribution watermark. Configurable via <repo-root>/supensour-config.yaml
-# (`watermark_template`, or per-skill `skills.review-code.watermark_template`).
-# Placeholder {skillName} → "supensour:review-code". WATERMARK is set at end of file.
+# (`watermark_template` + `watermark_url`, or per-skill `skills.review-code.*`).
+# Placeholder {skillName} → "supensour:review-code". Two rendered forms are set at
+# end of file: WATERMARK (plain, for console) and WATERMARK_MD ({skillName} as a
+# markdown link to watermark_url, for the .md report + PR/MR comments).
 SKILL_NAME="supensour:review-code"
 WATERMARK_DEFAULT="Generated with {skillName} · suprayan@supensour · github.com/supensour/supensour-agent"
+WATERMARK_URL_DEFAULT="https://github.com/supensour/supensour-agent"
 
 # decorate_body <body> → body + blank line + visible watermark + hidden prune marker.
-# Every posted comment/summary body goes through this so attribution is automatic and
-# the prune marker is always present (delete_prior matches on $MARKER).
-decorate_body() { printf '%s\n\n🤖 %s\n%s' "$1" "$WATERMARK" "$MARKER"; }
+# Posted comments render markdown, so use the linked form (WATERMARK_MD).
+decorate_body() { printf '%s\n\n🤖 %s\n%s' "$1" "$WATERMARK_MD" "$MARKER"; }
 
 # watermark_banner — one-line console attribution to stderr (call once per run).
+# Console is plain text → use WATERMARK (no markdown link).
 watermark_banner() { printf '🤖 %s\n' "$WATERMARK" >&2; }
 
 # --- Paths ------------------------------------------------------------------
@@ -284,28 +287,35 @@ wm_cfg_file() {
   [ -f "$f" ] && { printf '%s' "$f"; return 0; }
   return 1
 }
-# Top-level `watermark_template:` scalar.
+# Top-level `<key>:` scalar (e.g. watermark_template, watermark_url).
 _wm_top() {
-  local f; f="$(wm_cfg_file)" || return 1
-  awk '/^watermark_template:/{sub(/^watermark_template:/,""); print; exit}' "$f" | _clean_val
+  local f key="$1"; f="$(wm_cfg_file)" || return 1
+  awk -v k="$key" '$0 ~ "^" k ":" {sub("^" k ":",""); print; exit}' "$f" | _clean_val
 }
-# Per-skill `skills.<skill>.watermark_template`.
+# Per-skill `skills.<skill>.<key>`.
 _wm_skill() {
-  local f skill="$1"; f="$(wm_cfg_file)" || return 1
-  awk -v s="$skill" '
+  local f skill="$1" key="$2"; f="$(wm_cfg_file)" || return 1
+  awk -v s="$skill" -v k="$key" '
     /^skills:[[:space:]]*$/        { ins=1; next }
     ins && /^[^[:space:]]/         { ins=0 }
     ins && $0 ~ "^  " s ":[[:space:]]*$" { inb=1; next }
     inb && /^  [^[:space:]]/       { inb=0 }
-    inb && /^    watermark_template:/ { sub(/^    watermark_template:/,""); print; exit }
+    inb && $0 ~ "^    " k ":"      { sub("^    " k ":",""); print; exit }
   ' "$f" | _clean_val
 }
-# resolve_watermark — per-skill template > top-level > built-in default, with {skillName} substituted.
-resolve_watermark() {
-  local t; t="$(_wm_skill review-code 2>/dev/null || true)"
-  [ -z "$t" ] && t="$(_wm_top 2>/dev/null || true)"
-  [ -z "$t" ] && t="$WATERMARK_DEFAULT"
-  printf '%s' "${t//\{skillName\}/$SKILL_NAME}"
+# _wm_resolve <key> <default> — per-skill > top-level > built-in default.
+_wm_resolve() {
+  local key="$1" def="$2" v
+  v="$(_wm_skill review-code "$key" 2>/dev/null || true)"
+  [ -z "$v" ] && v="$(_wm_top "$key" 2>/dev/null || true)"
+  [ -z "$v" ] && v="$def"
+  printf '%s' "$v"
 }
-WATERMARK="$(resolve_watermark)"
-export WATERMARK SKILL_NAME
+# Resolve the raw template + url once, then render two forms:
+#   WATERMARK     plain text     — {skillName} → SKILL_NAME              (console)
+#   WATERMARK_MD  markdown       — {skillName} → [SKILL_NAME](url)       (.md report + comments)
+_WM_TPL="$(_wm_resolve watermark_template "$WATERMARK_DEFAULT")"
+_WM_URL="$(_wm_resolve watermark_url "$WATERMARK_URL_DEFAULT")"
+WATERMARK="${_WM_TPL//\{skillName\}/$SKILL_NAME}"
+WATERMARK_MD="${_WM_TPL//\{skillName\}/[$SKILL_NAME]($_WM_URL)}"
+export WATERMARK WATERMARK_MD SKILL_NAME
