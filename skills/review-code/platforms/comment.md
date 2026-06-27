@@ -48,22 +48,35 @@ Same block heads local report AND PR/MR top-level comment. Header must be exactl
 
 ## Detailed findings (grouped by dimension)
 
-Local report: summary followed by one block per finding. PR/MR **inline comment**: post per-finding block at file:line (drop `### [#N]` heading prefix, keep body):
+Local report: summary followed by one block per finding. PR/MR **inline comment**: post per-finding block at file:line (drop `### [#N]` heading prefix, keep body).
+
+> **Line breaks (important):** GitLab/GitHub/Bitbucket render GitHub-Flavored Markdown, which collapses a
+> **single** newline into a space. End each field line with a trailing **backslash `\`** (GFM hard break)
+> to force a line break with **no** blank-line gap — keeps the block tight. Use a blank line only around
+> fenced code blocks and before/after a heading. Do **not** stack `**Field:**` lines with bare single
+> newlines (they merge into one paragraph).
 
 ```
 ### 🤖 [#N] 🔴 critical — SQL injection in user lookup
-**File:** `src/api/auth.ts:42`
-**Dimension:** Security
-**Problem:** User input concatenated directly into SQL query string.
+
+**File:** `src/api/auth.ts:42` \
+**Dimension:** Security \
+**Problem:** User input concatenated directly into SQL query string. \
 **Impact:** Full database compromise. Attacker can extract/modify/delete all data.
+
 **Fix:**
+
 \`\`\`diff
 - const query = `SELECT * FROM users WHERE id = '${userId}'`;
 + const query = `SELECT * FROM users WHERE id = $1`;
 + const result = await db.query(query, [userId]);
 \`\`\`
+
 **Test suggestion:** Unit test with SQL injection payloads (`'; DROP TABLE users; --`) verifying query parameterization.
 ```
+
+(Each line above ends with ` \` except the line before a blank line / fenced block. `post-comment.sh` sends
+the body verbatim — the trailing backslashes survive JSON encoding and render as `<br>` on the PR/MR.)
 
 ## Missing test coverage (end of report)
 
