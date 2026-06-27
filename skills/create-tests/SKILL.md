@@ -1,7 +1,7 @@
 ---
 name: create-tests
 description: Generate tests for changed or specified source files across languages (Vue/Vitest, Spring Boot/JUnit5, extensible). Per-language conventions and test types (unit now; integration later). Writes minimum-viable specs following the project's naming/location conventions and can run them with scoped coverage. Use for "write tests for this", "create unit tests", "add test coverage for my diff".
-argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <target>] [--write]"
+argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <target>] [--write] [--help]"
 allowed-tools: Read, Grep, Glob, Bash, Agent
 ---
 
@@ -22,7 +22,11 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 /create-tests --type unit                  # test type (default; integration = later)
 /create-tests --coverage 100               # target/focus for coverage
 /create-tests --write                      # write spec files to disk (default: propose/print)
+/create-tests --help                       # print usage and exit
 ```
+
+**`--help` runs a script and stops** — no tests generated:
+`bash "<skill-dir>/scripts/help.sh"`, print output, stop.
 
 ## Input
 
@@ -34,6 +38,7 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 | `--base <branch>` | auto-detect | Diff base for changed-file detection (`origin/HEAD` → `main`/`master`/`develop`) |
 | `--coverage <target>` | — | Coverage focus, e.g. `100`, `branches` — guides which cases to emphasize |
 | `--write` | off | Write spec files to their convention path. Off → print proposed specs for review |
+| `--help` | — | Print usage (`scripts/help.sh`) and stop |
 
 ## Process
 

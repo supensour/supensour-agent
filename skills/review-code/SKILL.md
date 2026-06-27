@@ -1,7 +1,7 @@
 ---
 name: review-code
 description: Architect-level code review of a branch/PR diff across languages (Vue, Spring Boot, extensible). Reviews security, architecture, performance, quality, business/financial impact, and test gaps. Diff-scoped by default. Outputs a local report and optionally posts inline comments to GitHub/GitLab CE/Bitbucket PRs (pruning its own prior comments first). Use for "review this PR/MR", "review my diff", "code review before merge".
-argument-hint: "[--branch <branch>] [--push] [--push-saved <path>] [--platform <key>] [--base <branch>] [--files <glob>] [--severity <list>] [--lang <key>] [--scope diff|project]"
+argument-hint: "[--branch <branch>] [--push] [--push-saved <path>] [--clean <branch>] [--clean-all] [--platform <key>] [--base <branch>] [--files <glob>] [--severity <list>] [--lang <key>] [--scope diff|project] [--help]"
 allowed-tools: Read, Grep, Glob, Bash, WebFetch, AskUserQuestion, Agent
 ---
 
@@ -24,7 +24,19 @@ Code review skill. Reviews diffs like a 10-year architect — security, architec
 /review-code --severity critical,high # filter output severity
 /review-code --scope project          # review whole project, not just the diff
 /review-code --push-saved             # push a previously saved local review to PR/MR
+/review-code --clean                  # delete saved local reviews for current branch
+/review-code --clean feature/RANCH-1  # delete saved local reviews for a branch
+/review-code --clean-all              # delete all saved local reviews
+/review-code --help                   # print usage and exit
 ```
+
+**Utility flags run a script and stop** — no review is performed:
+- `--help` → `bash "<skill-dir>/scripts/help.sh"`, print output, stop.
+- `--clean [branch]` → `bash "<skill-dir>/scripts/clean.sh" [branch]` (default: current branch), stop.
+- `--clean-all` → `bash "<skill-dir>/scripts/clean.sh" --all`, stop.
+
+`clean` removes `<repo>/.supensour/review-code/<branch>/` (saved comments + JSON) and any kept worktrees
+for that branch; `--clean-all` removes the whole `.supensour/review-code/` tree.
 
 ## Input
 
@@ -39,6 +51,9 @@ Code review skill. Reviews diffs like a 10-year architect — security, architec
 | `--severity <list>` | all | Filter: `critical`, `high`, `medium`, `low`, `info` |
 | `--lang <key>` | auto-detect | Force language ruleset: `vue`, `springboot`, `data-migration`, `generic` |
 | `--scope <diff\|project>` | `diff` | `diff`: only flag issues in/caused by the diff. `project`: review the whole project |
+| `--clean [branch]` | current branch | Delete saved local reviews (comments + kept worktrees) for a branch, then stop |
+| `--clean-all` | — | Delete all saved local reviews (`.supensour/review-code/`), then stop |
+| `--help` | — | Print usage (`scripts/help.sh`) and stop |
 
 Local copy of every review **always saved** (regardless of `--push`), so findings never lost when PR/MR not available yet. See "Local persistence" below.
 
