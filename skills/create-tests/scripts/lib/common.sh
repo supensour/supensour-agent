@@ -96,6 +96,27 @@ proj_get() {
   ' "$f" | _clean_val
 }
 
+# ensure_project_config — create <repo>/.supensour/config/config.yaml if absent (commented hints).
+ensure_project_config() {
+  local root; root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -z "$root" ] && return 0
+  local f="$root/.supensour/config/config.yaml"
+  [ -f "$f" ] && return 0
+  mkdir -p "$(dirname "$f")"
+  cat > "$f" <<'EOF'
+# yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
+# Supensour per-repo hints (optional). Uncomment + set to skip detection.
+git:
+  # platform: gitlab-ce          # key into ~/.claude/config/supensour.yaml platforms
+  # token_env: GITLAB_TOKEN      # override the platform's token_env for this repo
+  # base_branch: develop         # default diff base
+project:
+  # language: vue                # default --lang (review-code / create-tests)
+  # test_type: unit              # default --type (create-tests)
+EOF
+  log "📝 Created $f — uncomment hints as needed."
+}
+
 # --- Language detection -----------------------------------------------------
 # detect_lang <path> → vue | springboot | "" (unknown). Extension-based, mirrors
 # the review-code rule-loading map.

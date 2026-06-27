@@ -39,6 +39,10 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 
 ### Step 0 — Resolve scope
 
+0. **Ensure config exists** — create the per-repo config from a template if absent (idempotent):
+   ```bash
+   bash "<skill-dir>/scripts/init-config.sh"   # creates <repo>/.supensour/config/config.yaml if missing
+   ```
 1. Resolve `--type` (default `unit`). If `integration` → print `Integration tests not yet supported — only --type unit.` and exit.
 2. Resolve target source files with the script:
    ```bash

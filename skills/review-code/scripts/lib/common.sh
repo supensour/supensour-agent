@@ -227,6 +227,56 @@ require_token() {
   return 0
 }
 
+# --- Config scaffolding (create-if-missing) ---------------------------------
+_remote_host() { git remote get-url origin 2>/dev/null | sed -E 's#^[a-z]+://##; s#^[^@]+@##; s#[:/].*$##'; }
+_token_env_for_type() {
+  case "$1" in gitlab) printf 'GITLAB_TOKEN' ;; bitbucket) printf 'BITBUCKET_TOKEN' ;; *) printf 'GITHUB_TOKEN' ;; esac
+}
+
+# ensure_global_config — create ~/.claude/config/supensour.yaml if absent (prefilled from the remote).
+ensure_global_config() {
+  local f="$HOME/.claude/config/supensour.yaml"
+  [ -f "$f" ] && return 0
+  local type host key tenv
+  type="$(_autodetect_type)"; [ -z "$type" ] && type="github"
+  host="$(_remote_host)"; if [ -n "$host" ]; then host="https://$host"; else host="https://github.com"; fi
+  key="$type"; tenv="$(_token_env_for_type "$type")"
+  mkdir -p "$(dirname "$f")"
+  cat > "$f" <<EOF
+# yaml-language-server: \$schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/global-config.schema.json
+# Supensour global platform catalog — review host + token_env for your setup.
+platform:
+  default: $key
+  platforms:
+    $key:
+      type: $type
+      host: $host
+      token_env: $tenv
+EOF
+  log "📝 Created $f — review host + token_env."
+}
+
+# ensure_project_config — create <repo>/.supensour/config/config.yaml if absent (commented hints).
+ensure_project_config() {
+  local root; root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -z "$root" ] && return 0
+  local f="$root/.supensour/config/config.yaml"
+  [ -f "$f" ] && return 0
+  mkdir -p "$(dirname "$f")"
+  cat > "$f" <<'EOF'
+# yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
+# Supensour per-repo hints (optional). Uncomment + set to skip detection.
+git:
+  # platform: gitlab-ce          # key into ~/.claude/config/supensour.yaml platforms
+  # token_env: GITLAB_TOKEN      # override the platform's token_env for this repo
+  # base_branch: develop         # default diff base
+project:
+  # language: vue                # default --lang (review-code / create-tests)
+  # test_type: unit              # default --type (create-tests)
+EOF
+  log "📝 Created $f — uncomment hints as needed."
+}
+
 # --- Watermark resolution ---------------------------------------------------
 # Repo config: <repo-root>/supensour-config.yaml (sits two levels above SKILL_DIR).
 wm_cfg_file() {

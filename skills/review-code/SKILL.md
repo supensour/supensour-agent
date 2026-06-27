@@ -95,12 +95,21 @@ WT="$(bash "<skill-dir>/scripts/worktree.sh" ensure "$SRC")"   # prints worktree
 ### Step 0 — Context gathering
 
 0. **Resolve source branch** `SRC` — `--branch` flag if provided, else current branch (`git rev-parse --abbrev-ref HEAD`). If `--branch` given but no such branch exists locally or on remote, error and exit.
+0b. **Ensure config exists** — create any missing config from a template (idempotent):
+   ```bash
+   bash "<skill-dir>/scripts/init-config.sh"   # creates ~/.claude/config/supensour.yaml + <repo>/.supensour/config/config.yaml if absent
+   ```
+   Prints `📝 Created …` for each file it writes (global catalog is prefilled from the detected remote; review/edit host + token_env).
 1. **Resolve platform + PR/MR + base** with the scripts (sequential — each needs the prior):
    ```bash
    bash "<skill-dir>/scripts/detect-platform.sh" [--platform <key>]      # → platform JSON
    PR_JSON="$(bash "<skill-dir>/scripts/fetch-pull-request.sh" --branch "$SRC" [--platform <key>])"   # → {number,url,title,base} or {}
    ```
-   No token or no open PR → `{}`; continue without push (local review only). Capture PR number, URL, title, **base**. The `detect-platform.sh` JSON also includes `base_branch` + `language` from the per-repo `.supensour/config/config.yaml` (empty if unset) — use them to skip detection below.
+   Capture PR number, URL, title, **base**. The `detect-platform.sh` JSON also includes `base_branch` + `language` from the per-repo `.supensour/config/config.yaml` (empty if unset) — use them to skip detection below.
+   **No open PR/MR found** (`{}`) → **stop and ask the user** (AskUserQuestion):
+   1. **Review against the default branch (recommended)** — diff `SRC` vs the repo default/base, local review only (no push; re-run `--push-saved` when a PR exists).
+   2. **Abort** — exit without reviewing.
+   (No token but a PR exists → continue local review, skip push.)
 2. **Detect base branch** — priority: `--base` flag → project `git.base_branch` (from detect JSON) → PR/MR `base` from the fetch → repo default (`git symbolic-ref refs/remotes/origin/HEAD` → else `main`/`master`/`develop`).
 3. **Collect diff** for `SRC` with the script:
    ```bash
