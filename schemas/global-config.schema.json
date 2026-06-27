@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/global-config.schema.json",
+  "title": "Supensour global config",
+  "description": "~/.claude/config/supensour.yaml — platform catalog shared across supensour skills.",
+  "type": "object",
+  "required": ["platform"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "platform": {
+      "type": "object",
+      "description": "Git platform catalog.",
+      "required": ["platforms"],
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Key of the default platform when auto-detect is ambiguous."
+        },
+        "platforms": {
+          "type": "object",
+          "description": "Map of platform key → platform definition.",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/platform" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "platform": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["github", "gitlab", "bitbucket"],
+          "description": "Platform family. Determines which platform-<type>.sh lib handles it."
+        },
+        "host": {
+          "type": "string",
+          "description": "Base URL, e.g. https://github.com or a self-hosted host."
+        },
+        "api_version": {
+          "type": "string",
+          "description": "Optional API version path segment (e.g. v4, rest/api/1.0)."
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Name of the env var holding the auth token."
+        },
+        "token_env_alternatives": {
+          "type": "array",
+          "description": "Fallback env var names tried if token_env is unset.",
+          "items": { "type": "string" }
+        },
+        "cli": {
+          "type": "string",
+          "description": "Preferred CLI tool when available (e.g. gh)."
+        }
+      }
+    }
+  }
+}

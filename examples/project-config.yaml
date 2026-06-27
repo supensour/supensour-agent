@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
+# Example per-repo config. Copy to <repo>/.supensour/config/config.yaml and edit.
+# All fields optional — each one present lets a skill SKIP a detection step.
+# The first line above gives editors (VS Code "YAML" extension) type hints + validation.
+
+git:
+  platform: gitlab-ce                  # key into the global catalog → skip platform auto-detect
+  token_env: MY_GITLAB_TOKEN           # override the platform's token_env for this repo
+  base_branch:                         # default diff base → skip base-branch detection
+
+project:
+  language: vue                        # default --lang for review-code / create-tests
+  test_type: unit                      # default --type for create-tests

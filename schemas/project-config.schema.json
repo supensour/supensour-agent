@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json",
+  "title": "Supensour project config",
+  "description": "<repo>/.supensour/config/config.yaml — per-repo hints that let skills skip detection. All fields optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "git": {
+      "type": "object",
+      "description": "Git platform hints for this repo.",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "Key into the global catalog's platform.platforms → skip platform auto-detect."
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Override the platform's token_env for this repo."
+        },
+        "base_branch": {
+          "type": "string",
+          "description": "Default diff base → skip base-branch detection."
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "description": "Project hints for this repo.",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["vue", "springboot"],
+          "description": "Default --lang for review-code / create-tests → skip extension sniffing."
+        },
+        "test_type": {
+          "type": "string",
+          "enum": ["unit", "integration"],
+          "description": "Default --type for create-tests."
+        }
+      }
+    }
+  }
+}

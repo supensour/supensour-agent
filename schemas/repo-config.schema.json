@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/repo-config.schema.json",
+  "title": "Supensour repo config",
+  "description": "<repo-root>/supensour-config.yaml — plugin-repo settings (watermark template + per-skill config).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "watermark_template": {
+      "type": "string",
+      "description": "Watermark text for skill output. Placeholders: {skillName}."
+    },
+    "author": {
+      "type": "string",
+      "description": "Attribution author (e.g. Java @author tag). Per-skill `author` overrides this."
+    },
+    "skills": {
+      "type": "object",
+      "description": "Per-skill overrides, keyed by skill name (review-code, create-tests, …).",
+      "additionalProperties": {
+        "type": ["object", "null"],
+        "additionalProperties": false,
+        "properties": {
+          "watermark_template": {
+            "type": "string",
+            "description": "Overrides the top-level watermark_template for this skill."
+          },
+          "author": {
+            "type": "string",
+            "description": "Overrides the top-level author for this skill."
+          }
+        }
+      }
+    }
+  }
+}
