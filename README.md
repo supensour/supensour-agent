@@ -18,37 +18,24 @@ Antigravity, and Cursor.
 All skills are language-agnostic and tunable via parameters (`--lang`, `--severity`,
 `--framework`, …) plus per-language rule files.
 
-## Install
+## Install CLI
 
-**Recommended — [supensour-cli](https://github.com/supensour/supensour-cli):** one command
-installs the skills into any supported AI tool at global scope.
+Install [supensour-agent-cli](https://github.com/supensour/supensour-agent-cli) with one command:
 
 ```bash
-git clone https://github.com/supensour/supensour-cli
-cd supensour-cli && bash install.sh
+curl -fsSL https://raw.githubusercontent.com/supensour/supensour-agent-cli/master/install-remote.sh | bash
+```
 
+Restart your shell afterward (or `export PATH="$HOME/.local/bin:$PATH"`).
+
+## Install skills
+
+```bash
 supensour install            # all detected tools
 supensour install claude     # or a single tool: claude | copilot | antigravity | cursor
 ```
 
 Update later with `supensour update [tool]`.
-
-<details>
-<summary>Manual install (Claude Code)</summary>
-
-```
-/plugin marketplace add https://github.com/supensour/supensour-agent
-/plugin install supensour@supensour
-```
-
-Update after changes are pushed:
-
-```
-/plugin marketplace update supensour
-/reload-plugins
-/reload-skills
-```
-</details>
 
 After installing, the skills appear as `/review-code` and `/create-tests`
 (`/supensour:review-code` in Claude Code — see the note above).
