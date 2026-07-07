@@ -14,7 +14,7 @@ author: "supensour-agent"
 # Scaffold for future per-skill settings.
 skills:
   review-code:
-    watermark_template: "Reviewed with skill supensour:review-code · suprayan@supensour github.com/supensour/supensour-agent"
+    watermark_template: "Reviewed with skill {skillName} · suprayan@supensour github.com/supensour/supensour-agent"
     author: "supensour-agent@review-code"
   create-tests:
     watermark_template: "Generated with skill supensour:create-tests · suprayan@supensour · github.com/supensour/supensour-agent"
