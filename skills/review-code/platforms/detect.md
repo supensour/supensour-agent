@@ -56,7 +56,7 @@ Associate the schemas in editors with a top-of-file modeline:
 
 Precedence: **project `git.token_env`** → platform `token_env` → each `token_env_alternatives` entry.
 First env var that is set wins. Missing token → `token_present:false`; the skill keeps the local review
-and skips push/prune (see SKILL.md edge cases).
+and skips push/reconcile (see SKILL.md edge cases).
 
 ## Base branch & language hints
 
@@ -81,5 +81,15 @@ live in `lib/platform-*.sh`
 ## Extending to a new platform
 
 Add `scripts/lib/platform-<type>.sh` implementing `<type>_fetch_pr`, `_post_summary`, `_post_inline`,
-`_post_file`, `_delete_prior` (same signatures as existing libs). Register its hostname in
-`_autodetect_type` in `common.sh`. No other file changes — `platform_dispatch` routes by `type`.
+`_post_file`, and the reconcile trio `_list_prior`, `_update_comment`, `_resolve_comment` (same signatures
+as existing libs; see any `platform-*.sh`). Reconcile **never deletes** — implement resolve as
+collapse/mark-resolved, not delete. Register its hostname in `_autodetect_type` in `common.sh`. No other
+file changes — `platform_dispatch` routes by `type`.
+
+Reconcile signatures:
+- `<type>_list_prior <pr>` → JSON array `[{id, aux, kind, fp, h}]` for this skill's comments (match the
+  marker prefix `supensour:review-code`; parse `fp`/`h` from it). `aux`/`kind` carry platform-specific
+  bits the update/resolve calls need (node id, discussion id, comment version, cloud/server).
+- `<type>_update_comment <pr> <id> <aux> <kind> <body>` → edit in place (0=ok).
+- `<type>_resolve_comment <pr> <id> <aux> <kind>` → collapse/mark resolved (0=ok). Return non-zero (or 0
+  as a no-op) when the platform can't resolve a given comment kind — the caller leaves it in place.

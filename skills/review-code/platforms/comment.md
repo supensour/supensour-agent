@@ -2,18 +2,25 @@
 
 **Single source of truth for ALL output** — local report (printed + saved) and PR/MR comments use exact templates. SKILL.md does not define own formats; references this file. Use headers **verbatim** — no improvise, translate, or append skill name / branch / suffix.
 
-> **Posting/pruning is executed by scripts**, not raw API calls: `scripts/post-comment.sh` (summary + inline with fallback) and `scripts/prune-comments.sh`. Per-platform API lives in `scripts/lib/platform-*.sh`. This doc owns the **markdown templates** + the posting **semantics** (marker, fallback chain, prune); it does not re-emit curl/gh commands.
+> **Posting/reconcile is executed by scripts**, not raw API calls: `scripts/post-comment.sh` (single summary/inline post with fallback) and `scripts/reconcile-comments.sh` (the whole review at once: dedup / update / post / resolve — **never deletes**). Per-platform API lives in `scripts/lib/platform-*.sh`. This doc owns the **markdown templates** + the posting **semantics** (marker, fallback chain, reconcile); it does not re-emit curl/gh commands.
 
 ## Hidden marker (required on every posted comment)
 
-Every comment and summary this skill posts ends with a hidden HTML-comment marker:
+Every comment and summary this skill posts ends with a hidden HTML-comment marker carrying two ids:
 
 ```
-<!-- supensour:review-code -->
+<!-- supensour:review-code fp=<fingerprint> h=<body-hash> -->
 ```
 
-The platform libs append it automatically. It identifies this skill's own comments so a later run can
-prune them (see "Prune before posting"). Never remove or translate it; it does not render on the PR page.
+- **`fp`** — finding fingerprint: a stable, line-independent id of the finding
+  (hash of `file` + `dimension` + `title`). The summary uses `fp=summary`.
+- **`h`** — body content hash: changes only when the finding's wording/fix changes.
+
+The platform libs append it automatically (`decorate_body`, from `$FP`). It lets a later run
+**reconcile** its own comments — match the same finding (`fp`), detect an edit (`h`), and find fixed
+findings — without deleting anything (see "Reconcile before posting"). Never remove or translate it; it
+does not render on the PR page. Legacy comments carrying the old plain marker are still recognized as
+ours and left in place (never deleted).
 
 ## Visible watermark (attribution)
 
@@ -51,6 +58,16 @@ Same block heads local report AND PR/MR top-level comment. Header must be exactl
 ## Detailed findings (grouped by dimension)
 
 Local report: summary followed by one block per finding. PR/MR **inline comment**: post per-finding block at file:line (drop `### [#N]` heading prefix, keep body).
+
+**Brevity & no redundancy (required):**
+- Each field says something the others do **not**. Do not restate the title in **Problem**, and do not
+  restate **Problem** in **Impact**.
+  - **Problem** = *what is wrong + where*, one line. (The title already names it — add the mechanism, not a paraphrase.)
+  - **Impact** = *the consequence if unfixed*, one line. Skip it when it adds nothing beyond the problem (e.g. an obvious typo).
+  - **Fix** = the concrete change (diff/snippet). Let code carry it; no prose re-explaining the diff.
+  - **Test suggestion** = one sentence, only when a real gap exists.
+- Prefer one tight line per field over a paragraph. No filler ("it is important to note", "as you can see").
+- Omit a field entirely rather than pad it. `info`/`low` findings are often just title + one-line Problem.
 
 > **Line breaks (important):** GitLab/GitHub/Bitbucket render GitHub-Flavored Markdown, which collapses a
 > **single** newline into a space. End each field line with a trailing **backslash `\`** (GFM hard break)
@@ -106,47 +123,72 @@ Test suggestions brief — one sentence human or AI agent act on immediately.
 | test | npm run test | ⏭️ skipped — 3 medium+ findings |
 ```
 
-## Prune before posting (always, when pushing)
+## Reconcile before posting (never delete)
 
-Before posting a fresh review, remove this skill's own prior comments so they don't stack across re-runs:
+Push the whole review in one reconcile pass instead of delete-then-repost. Build a **manifest** of the
+current review, then call `reconcile-comments.sh`:
 
 ```bash
-bash "$SKILL_DIR/scripts/prune-comments.sh" "$PR" [--platform <key>]
-# → 🧹 Removed N stale review comment(s)
+bash "$SKILL_DIR/scripts/reconcile-comments.sh" "$PR" <manifest.json> [--platform <key>] [--head <sha>]
+# → ♻ Reconcile: 2 posted, 1 updated, 3 unchanged, 1 resolved (0 deleted)
 ```
 
-`prune-comments.sh` lists the PR/MR's comments, keeps only those containing the marker (this skill's
-own — from any prior run), deletes them, and prints the count. Auth/permission failure → warns and
-continues (never aborts the push). Then post the new summary + inline comments.
+Manifest JSON (the skill writes it; body text lives in files, one per comment):
 
-## Posting + the inline fallback chain
+```json
+{
+  "summary":  { "body_file": "<report-summary>.md" },
+  "findings": [
+    { "file": "src/api/auth.ts", "line": 42, "dimension": "Security",
+      "title": "SQL injection in user lookup", "body_file": "<finding-1>.md" }
+  ]
+}
+```
+
+For each current finding, `reconcile-comments.sh` matches this skill's prior comments by `fp` and acts —
+**it never deletes**:
+
+| Situation | Action |
+|---|---|
+| Same finding, body unchanged (`h` matches) | **skip** — no duplicate comment |
+| Same finding, body changed (`h` differs) | **update in place** (edit the existing comment) |
+| New finding (no prior `fp`) | **post** via inline → file-level → standalone comment fallback below (never merged into the summary comment) |
+| Prior finding no longer present this run | **resolve** — collapse/mark resolved (issue fixed) |
+
+The summary (`fp=summary`) is edited in place when it changed, else left as-is; it is never resolved or
+deleted. Auth/permission failure → warns and keeps the local review (never aborts hard).
+
+### Single-comment posting (used internally, and available standalone)
+
+`post-comment.sh` posts one comment with a **three-step fallback** and prints the level used:
 
 ```bash
-# Top-level summary (post first):
 bash "$SKILL_DIR/scripts/post-comment.sh" summary "$PR" <summary-body-file> [--platform <key>] [--head <sha>]
-
-# Each finding inline (prints the level actually used):
 bash "$SKILL_DIR/scripts/post-comment.sh" inline "$PR" <path> <line> <body-file> [--platform <key>] [--head <sha>]
 ```
-
-`post-comment.sh inline` applies a **three-step fallback** and prints which level it used:
 
 1. **`line`** — inline comment at `path:line`.
 2. **`file`** — if the line is not commentable (position rejected / line not in diff / HTTP 422),
    retry as a **file-level comment** (comment on the file, top — no line).
-3. **`summary`** — if file-level also fails, post the finding as a top-level comment.
-4. **`failed`** — all attempts failed (logged; finding remains in the saved local report).
+3. **`comment`** — if the line can't be found / is outside the diff context, post the finding as its
+   **own separate normal PR/MR comment** (a standalone top-level comment carrying the finding's `fp`).
+4. **`failed`** — all attempts failed: the finding is **kept in the local report only**.
 
-This supersedes the old "skip inline, include in summary" behavior — findings now land as close to the
-code as the platform allows.
+**A detailed finding is never merged into the aggregated summary comment.** The summary comment (`fp=summary`)
+holds only the summary blocks below (findings table, missing-test-coverage table, build/test table). A
+finding that can't attach to the code becomes its **own** standalone comment (tier 3) — distinct from the
+summary comment, with its own fingerprint so reconcile still dedups/updates/resolves it.
 
 ## Per-platform mechanics (implemented in scripts/lib/platform-*.sh)
 
-| | Summary | Inline (line) | File-level (no line) | Prune (delete prior) |
-|---|---|---|---|---|
-| **GitHub** | `issues/{n}/comments` | `pulls/{n}/comments` + `line`,`commit_id`,`side:RIGHT` | `pulls/{n}/comments` + `subject_type:file` (no line) | delete `pulls/comments/{id}` + `issues/comments/{id}` matching marker |
-| **GitLab** | `merge_requests/{iid}/notes` | `discussions` position with `new_line` | `discussions` position, paths only (no line) | delete `merge_requests/{iid}/notes/{id}` matching marker |
-| **Bitbucket** | `pullrequests/{id}/comments` | `inline:{path,to}` (Cloud) / anchor+line (Server) | `inline:{path}` no `to` (Cloud) / anchor no line (Server) | delete `…/comments/{id}` matching marker (Server needs `version`) |
+Reconcile ops (**no delete anywhere**): `list_prior` finds our comments by marker; `update_comment` edits
+in place; `resolve_comment` collapses/marks resolved.
+
+| | Summary | Inline (line) | File-level (no line) | list_prior | update_comment | resolve_comment |
+|---|---|---|---|---|---|---|
+| **GitHub** | `issues/{n}/comments` | `pulls/{n}/comments` + `line`,`commit_id`,`side:RIGHT` | `pulls/{n}/comments` + `subject_type:file` (no line) | GET pulls + issues comments, match marker | PATCH `pulls/comments/{id}` \| `issues/comments/{id}` | GraphQL `minimizeComment(classifier:RESOLVED)` by node_id |
+| **GitLab** | `merge_requests/{iid}/notes` | `discussions` position with `new_line` | `discussions` position, paths only (no line) | GET `discussions` (note id + discussion id) | PUT `merge_requests/{iid}/notes/{id}` | PUT `discussions/{discussion_id}?resolved=true` (diff discussions only) |
+| **Bitbucket** | `pullrequests/{id}/comments` | `inline:{path,to}` (Cloud) / anchor+line (Server) | `inline:{path}` no `to` (Cloud) / anchor no line (Server) | GET comments (Cloud) / activities (Server); Server carries `version` | PUT `…/comments/{id}` (Server needs `version`) | POST `…/comments/{id}/resolve` (Cloud) / PUT `state:RESOLVED` (Server) |
 
 ## Error handling
 

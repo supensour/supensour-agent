@@ -16,7 +16,8 @@ Options:
   --lang <key>           Force ruleset: vue, springboot, data-migration, generic.
   --scope <diff|project> diff (default): only diff-attributable findings; project: whole repo.
   --platform <key>       Git platform key from ~/.supensour/config/supensour.yaml.
-  --push                 Also post findings as PR/MR comments (prunes own prior comments first).
+  --push                 Also post findings as PR/MR comments. Reconciles prior comments
+                         (skips unchanged, updates changed, resolves fixed) — never deletes.
   --push-saved [path]    Post a previously saved local review (no path → latest for the branch).
   --clean [branch]       Remove saved local reviews for a branch (default: current branch).
   --clean-all            Remove all saved local reviews for every branch.

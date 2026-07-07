@@ -16,8 +16,19 @@
 
 # --- Marker & watermark -----------------------------------------------------
 # Hidden HTML-comment marker embedded in every comment/summary this skill posts.
-# Used to identify (and prune) our own prior comments on a PR/MR.
-MARKER="<!-- supensour:review-code -->"
+# Used to identify our own prior comments on a PR/MR so a re-run can reconcile
+# (dedup / update-in-place / resolve-when-fixed) them — never delete them.
+#
+# Marker carries two ids so a later run can act without re-deleting:
+#   fp  finding fingerprint  — stable identity of a finding (file+dimension+title),
+#                             line-independent so a moved finding still matches.
+#   h   body content hash    — changes only when the finding wording/fix changes,
+#                             so an unchanged finding is skipped, a changed one updated.
+# Summary comment uses fp=summary.
+MARKER_PREFIX="supensour:review-code"
+# Legacy plain marker (pre-fp). Kept so old comments are still recognized as ours
+# and never treated as a stranger's comment. Matching uses the prefix, not this exact string.
+MARKER="<!-- ${MARKER_PREFIX} -->"
 
 # Visible attribution watermark. Configurable via <repo-root>/supensour-config.yaml
 # (`watermark_template` + `watermark_url`, or per-skill `skills.review-code.*`).
@@ -28,9 +39,29 @@ SKILL_NAME="supensour:review-code"
 WATERMARK_DEFAULT="Generated with {skillName} · suprayan@supensour · github.com/supensour/supensour-agent"
 WATERMARK_URL_DEFAULT="https://github.com/supensour/supensour-agent"
 
-# decorate_body <body> → body + blank line + visible watermark + hidden prune marker.
+# 12-char content hash (portable: shasum on macOS, sha1sum on Linux).
+_hash12() {
+  local out
+  out="$( { command -v shasum >/dev/null 2>&1 && shasum || sha1sum; } <<<"$1" )"
+  printf '%s' "${out%% *}" | cut -c1-12
+}
+
+# finding_fp <file> <dimension> <title> → stable, line-independent finding id.
+finding_fp() { _hash12 "$1"$'\n'"$2"$'\n'"$3"; }
+
+# marker_line <fp> <body-hash> → hidden HTML-comment marker for one comment.
+marker_line() { printf '<!-- %s fp=%s h=%s -->' "$MARKER_PREFIX" "$1" "$2"; }
+
+# decorate_body <body> → body + blank line + visible watermark + hidden marker.
+# The marker's fp comes from $FP (set by the caller; defaults to "summary"); the
+# body hash is computed here over the raw body (excludes watermark/marker), so the
+# same finding hashes identically across runs and reconcile can skip it unchanged.
 # Posted comments render markdown, so use the linked form (WATERMARK_MD).
-decorate_body() { printf '%s\n\n🤖 %s\n%s' "$1" "$WATERMARK_MD" "$MARKER"; }
+decorate_body() {
+  local body="$1" fp="${FP:-summary}" h
+  h="$(_hash12 "$body")"
+  printf '%s\n\n🤖 %s\n%s' "$body" "$WATERMARK_MD" "$(marker_line "$fp" "$h")"
+}
 
 # watermark_banner — one-line console attribution to stderr (call once per run).
 # Console is plain text → use WATERMARK (no markdown link).
@@ -42,7 +73,7 @@ _COMMON_SRC="${BASH_SOURCE[0]}"
 LIB_DIR="$(cd "$(dirname "$_COMMON_SRC")" && pwd)"
 SCRIPTS_DIR="$(cd "$LIB_DIR/.." && pwd)"
 SKILL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
-export SKILL_DIR SCRIPTS_DIR LIB_DIR MARKER WATERMARK
+export SKILL_DIR SCRIPTS_DIR LIB_DIR MARKER MARKER_PREFIX WATERMARK
 
 # --- Logging ----------------------------------------------------------------
 log()  { printf '%s\n' "$*" >&2; }
@@ -221,10 +252,10 @@ platform_dispatch() {
   "$fn" "$@"
 }
 
-# require_token — guard for push/prune ops; warns + returns 1 if no token.
+# require_token — guard for push/reconcile ops; warns + returns 1 if no token.
 require_token() {
   if [ -z "${TOKEN:-}" ]; then
-    warn "No token in \$${TOKEN_ENV:-<token_env>}. Set it to push/prune comments; keeping local review only."
+    warn "No token in \$${TOKEN_ENV:-<token_env>}. Set it to push/reconcile comments; keeping local review only."
     return 1
   fi
   return 0

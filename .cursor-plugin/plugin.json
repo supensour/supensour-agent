@@ -1,7 +1,7 @@
 {
   "name": "supensour",
   "displayName": "Supensour",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Generic, parameterized software-development workflow skills (code review, test generation). Language-agnostic and extensible.",
   "author": {
     "name": "supensour",

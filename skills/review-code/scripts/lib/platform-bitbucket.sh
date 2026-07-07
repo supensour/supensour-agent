@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # platform-bitbucket.sh — Bitbucket Cloud + Server implementation.
-# Uniform interface: bitbucket_fetch_pr/_post_summary/_post_inline/_post_file/_delete_prior.
+# Uniform interface: bitbucket_fetch_pr/_post_summary/_post_inline/_post_file/
+#   _list_prior/_update_comment/_resolve_comment. Reconcile never deletes.
 # Requires: $TOKEN, $HOST, $WORKSPACE/$OWNER, $REPO from common.sh; jq, curl.
 
 # Server = self-hosted (HOST not on bitbucket.org). Cloud = api.bitbucket.org/2.0.
@@ -73,24 +74,50 @@ bitbucket_post_file() {
   { [ "$code" = 200 ] || [ "$code" = 201 ]; }
 }
 
-bitbucket_delete_prior() {
-  local pr="$1" n=0
+# bitbucket_list_prior <pr> → JSON array of our prior comments [{id,aux,kind,fp,h}].
+#   Server: kind="server", aux=comment version (required to update/resolve).
+#   Cloud:  kind="cloud",  aux="".
+bitbucket_list_prior() {
+  local pr="$1"
   if _bb_is_server; then
-    # Server delete requires the comment version; comments arrive via activities. Best-effort.
-    local rows id ver
-    rows="$(_bb_api GET "/pull-requests/$pr/activities?limit=100" | _body \
-      | jq -r --arg m "$MARKER" '.values[]?.comment | select(.!=null) | select(.text|contains($m)) | "\(.id) \(.version)"')"
-    while read -r id ver; do
-      [ -z "$id" ] && continue
-      _bb_api DELETE "/pull-requests/$pr/comments/$id?version=$ver" >/dev/null && n=$((n+1))
-    done <<< "$rows"
+    _bb_api GET "/pull-requests/$pr/activities?limit=100" | _body \
+      | jq -c '[ .values[]?.comment | select(.!=null) | select(.text|test("supensour:review-code"))
+          | . as $c
+          | ( ($c.text|capture("fp=(?<fp>[a-z0-9]+) h=(?<h>[a-z0-9]+)"))? // {fp:"",h:""} ) as $m
+          | {id:$c.id, aux:($c.version|tostring), kind:"server", fp:$m.fp, h:$m.h} ]' \
+      2>/dev/null || printf '[]'
   else
-    local ids id
-    ids="$(_bb_api GET "/pullrequests/$pr/comments?pagelen=100" | _body \
-      | jq -r --arg m "$MARKER" '.values[]? | select((.content.raw // "")|contains($m)) | .id')"
-    for id in $ids; do
-      _bb_api DELETE "/pullrequests/$pr/comments/$id" >/dev/null && n=$((n+1))
-    done
+    _bb_api GET "/pullrequests/$pr/comments?pagelen=100" | _body \
+      | jq -c '[ .values[]? | select((.content.raw // "")|test("supensour:review-code"))
+          | . as $c
+          | ( ($c.content.raw|capture("fp=(?<fp>[a-z0-9]+) h=(?<h>[a-z0-9]+)"))? // {fp:"",h:""} ) as $m
+          | {id:$c.id, aux:"", kind:"cloud", fp:$m.fp, h:$m.h} ]' \
+      2>/dev/null || printf '[]'
   fi
-  printf '%s' "$n"
+}
+
+# bitbucket_update_comment <pr> <id> <aux=version> <kind> <body> → edit in place. 0=ok.
+bitbucket_update_comment() {
+  local pr="$1" id="$2" aux="$3" kind="$4" body="$5" payload code
+  if [ "$kind" = server ]; then
+    payload="$(jq -n --arg t "$(decorate_body "$body")" --argjson v "${aux:-0}" '{text:$t, version:$v}')"
+    code="$(_bb_api PUT "/pull-requests/$pr/comments/$id" -d "$payload" | _code)"
+  else
+    payload="$(jq -n --arg t "$(decorate_body "$body")" '{content:{raw:$t}}')"
+    code="$(_bb_api PUT "/pullrequests/$pr/comments/$id" -d "$payload" | _code)"
+  fi
+  { [ "$code" = 200 ] || [ "$code" = 201 ]; }
+}
+
+# bitbucket_resolve_comment <pr> <id> <aux=version> <kind> → mark resolved. 0=ok.
+# Server: PUT state=RESOLVED (+version). Cloud: POST .../resolve. Never deletes.
+bitbucket_resolve_comment() {
+  local pr="$1" id="$2" aux="$3" kind="$4" payload code
+  if [ "$kind" = server ]; then
+    payload="$(jq -n --argjson v "${aux:-0}" '{state:"RESOLVED", version:$v}')"
+    code="$(_bb_api PUT "/pull-requests/$pr/comments/$id" -d "$payload" | _code)"
+  else
+    code="$(_bb_api POST "/pullrequests/$pr/comments/$id/resolve" | _code)"
+  fi
+  { [ "$code" = 200 ] || [ "$code" = 201 ]; }
 }

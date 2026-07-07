@@ -1,6 +1,6 @@
 ---
 name: review-code
-description: Architect-level code review of a branch/PR diff across languages (Vue, Spring Boot, extensible). Reviews security, architecture, performance, quality, business/financial impact, and test gaps. Diff-scoped by default. Outputs a local report and optionally posts inline comments to GitHub/GitLab CE/Bitbucket PRs (pruning its own prior comments first). Use for "review this PR/MR", "review my diff", "code review before merge".
+description: Architect-level code review of a branch/PR diff across languages (Vue, Spring Boot, extensible). Reviews security, architecture, performance, quality, business/financial impact, and test gaps. Diff-scoped by default. Outputs a local report and optionally posts inline comments to GitHub/GitLab CE/Bitbucket PRs, reconciling its own prior comments (dedup unchanged, update changed, resolve fixed) and never deleting them. Use for "review this PR/MR", "review my diff", "code review before merge".
 argument-hint: "[--branch <branch>] [--push] [--push-saved <path>] [--clean <branch>] [--clean-all] [--platform <key>] [--base <branch>] [--files <glob>] [--severity <list>] [--lang <key>] [--scope diff|project] [--help]"
 allowed-tools: Read, Grep, Glob, Bash, WebFetch, AskUserQuestion, Agent
 ---
@@ -17,7 +17,7 @@ Code review skill. Reviews diffs like a 10-year architect — security, architec
 ```
 /review-code                          # review current branch's PR (diff-scoped)
 /review-code --branch feature/RANCH-1 # review another branch's PR
-/review-code --push                   # also post comments to PR (prunes own prior comments first)
+/review-code --push                   # also post comments to PR (reconciles: dedup/update/resolve — never deletes)
 /review-code --platform gitlab-ce     # override platform detection
 /review-code --base main              # explicit base branch
 /review-code --files src/api/         # scope to specific paths
@@ -245,21 +245,25 @@ Two entry paths:
 Both paths then, **in this order**:
 
 1. **Require PR/MR resolved.** None found → **keep local copy**, warn, skip: `⚠ No open PR/MR for branch — review saved locally. Re-run with --push-saved when PR/MR exists.` Token missing/auth fail → same.
-2. **Prune prior comments** (always, before posting) — remove this skill's own earlier comments so re-runs don't stack:
-   ```bash
-   bash "<skill-dir>/scripts/prune-comments.sh" "$PR" [--platform <key>]   # → 🧹 Removed N stale review comment(s)
+2. **Build the reconcile manifest.** Write one markdown body file per comment (the summary block + one per finding, per `platforms/comment.md`), then a manifest JSON listing them:
+   ```json
+   {
+     "summary":  { "body_file": "<dir>/summary.md" },
+     "findings": [
+       { "file": "src/api/auth.ts", "line": 42, "dimension": "Security",
+         "title": "SQL injection in user lookup", "body_file": "<dir>/f1.md" }
+     ]
+   }
    ```
-   Auth/permission failure here → warn, continue to post.
-3. **Post the top-level summary** (first):
+   (Write these under the saved-review dir or a temp dir. `file`+`dimension`+`title` define each finding's stable fingerprint — keep the title stable across re-runs so the same issue is recognized.)
+3. **Reconcile — post without deleting.** One call handles dedup / update-in-place / post / resolve-when-fixed:
    ```bash
-   bash "<skill-dir>/scripts/post-comment.sh" summary "$PR" <summary-body-file> [--platform <key>] [--head <sha>]
+   bash "<skill-dir>/scripts/reconcile-comments.sh" "$PR" <manifest.json> [--platform <key>] [--head <sha>]
+   # → ♻ Reconcile: 2 posted, 1 updated, 3 unchanged, 1 resolved (0 deleted)
    ```
-4. **Post each finding inline** — `post-comment.sh inline` applies the **line → file-level → summary** fallback automatically (see `platforms/comment.md`). Prints the level used per finding:
-   ```bash
-   bash "<skill-dir>/scripts/post-comment.sh" inline "$PR" <path> <line> <body-file> [--platform <key>] [--head <sha>]
-   ```
-   Post inline comments in parallel batches (≈5 concurrent) where the platform is one-call-per-finding (GitLab/Bitbucket), respecting `Retry-After`.
-5. On success, mark the saved JSON `pushed: true` with the PR/MR URL (avoid double-posting). Then, if a worktree was kept (`worktree` path still exists), remove it: `bash "<skill-dir>/scripts/worktree.sh" remove <worktree>`.
+   - **Never deletes** any comment. Prior comments for the same finding are **skipped** (unchanged) or **updated in place** (changed); brand-new findings are **posted** (inline → file-level → **standalone comment** when the line isn't in the diff; **never merged into the summary comment**); prior findings **no longer present are resolved** (collapsed / marked resolved — the issue is fixed).
+   - Auth/permission failure → warns and keeps the local review (never aborts hard). Report the reconcile line to the user.
+4. On success, mark the saved JSON `pushed: true` with the PR/MR URL (avoid double-posting). Then, if a worktree was kept (`worktree` path still exists), remove it: `bash "<skill-dir>/scripts/worktree.sh" remove <worktree>`.
 
 ## Severity definitions
 

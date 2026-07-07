@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # platform-gitlab.sh — GitLab (CE + EE, incl. self-hosted) implementation.
-# Uniform interface: gitlab_fetch_pr/_post_summary/_post_inline/_post_file/_delete_prior.
+# Uniform interface: gitlab_fetch_pr/_post_summary/_post_inline/_post_file/
+#   _list_prior/_update_comment/_resolve_comment. Reconcile never deletes.
 # Project id = URL-encoded path ($PROJECT_PATH) accepted directly by the v4 API.
 # Requires: $TOKEN, $HOST, $PROJECT_PATH from common.sh; jq, curl.
 
@@ -58,12 +59,35 @@ gitlab_post_file() {
   [ "$code" = 201 ]
 }
 
-gitlab_delete_prior() {
-  local mr="$1" n=0 ids id
-  ids="$(_gl_api GET "/merge_requests/$mr/notes?per_page=100" | _body \
-        | jq -r --arg m "$MARKER" '.[]? | select(.body|contains($m)) | .id')"
-  for id in $ids; do
-    _gl_api DELETE "/merge_requests/$mr/notes/$id" >/dev/null && n=$((n+1))
-  done
-  printf '%s' "$n"
+# gitlab_list_prior <mr> → JSON array of our prior notes [{id,aux,kind,fp,h}].
+#   aux  = discussion id (needed to resolve a diff discussion).
+#   kind = "diff" (resolvable inline/file discussion) | "note" (summary/individual).
+# Reads /discussions so each note carries its discussion id. Caps at 100 discussions.
+gitlab_list_prior() {
+  local mr="$1"
+  _gl_api GET "/merge_requests/$mr/discussions?per_page=100" | _body \
+    | jq -c '[ .[]? as $d | $d.notes[]?
+        | select(.body|test("supensour:review-code"))
+        | . as $n
+        | ( ($n.body|capture("fp=(?<fp>[a-z0-9]+) h=(?<h>[a-z0-9]+)"))? // {fp:"",h:""} ) as $m
+        | {id:$n.id, aux:$d.id, kind:(if $n.type=="DiffNote" then "diff" else "note" end), fp:$m.fp, h:$m.h} ]' \
+    2>/dev/null || printf '[]'
+}
+
+# gitlab_update_comment <mr> <id> <aux> <kind> <body> → edit note in place. 0=ok.
+gitlab_update_comment() {
+  local mr="$1" id="$2" body="$5" payload code
+  payload="$(jq -n --arg b "$(decorate_body "$body")" '{body:$b}')"
+  code="$(_gl_api PUT "/merge_requests/$mr/notes/$id" -d "$payload" | _code)"
+  [ "$code" = 200 ]
+}
+
+# gitlab_resolve_comment <mr> <id> <aux=discussion> <kind> → resolve discussion. 0=ok.
+# Only diff discussions are resolvable; summary/individual notes are left untouched
+# (never deleted). Marks the thread resolved on the MR page.
+gitlab_resolve_comment() {
+  local mr="$1" aux="$3" kind="$4" code
+  [ "$kind" = diff ] || return 0
+  code="$(_gl_api PUT "/merge_requests/$mr/discussions/$aux?resolved=true" | _code)"
+  [ "$code" = 200 ]
 }
