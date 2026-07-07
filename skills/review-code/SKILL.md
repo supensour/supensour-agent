@@ -183,9 +183,12 @@ After analysis, verify the change builds and passes. Detect project type from ro
 3. `npm run test` — **only if zero medium-or-higher findings**. If `test` script absent, note skipped.
 
 **Spring Boot Maven project** (root has `pom.xml`):
-1. `mvn clean verify` — **only if zero medium-or-higher findings**.
+1. `mvn -B clean compile`. Fails → record build failure, stop verification.
+2. `mvn -B clean verify` — **only if zero medium-or-higher findings**.
 
-Gate logic: count `medium`+`high`+`critical` findings. >0 → **skip test/verify**, note `Tests skipped — N medium+ findings to address first` (still run install + build for Node). ==0 → run full test/verify.
+`-B` = batch mode, disables color/interactive output (same reason as `npm ci`/`npm run build` always running for Node).
+
+Gate logic: count `medium`+`high`+`critical` findings. >0 → **skip test/verify**, note `Tests skipped — N medium+ findings to address first` (still run install + build for Node/Maven). ==0 → run full test/verify.
 
 Other project types: skip, note `No recognized build system — verification skipped`. Quote exact error output on failure; build failures reported as 🔴 critical.
 
