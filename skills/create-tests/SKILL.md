@@ -70,10 +70,28 @@ Load in one parallel batch:
 
 Before writing, **read one neighboring existing test** in the project to match its concrete style.
 
-### Step 2 — Generate (parallel per target)
+### Step 2 — Generate (executor pool per target)
 
-Targets are independent — **fan out across parallel subagents**, one per source file (group tiny related
-files). Each subagent receives: the source file, the loaded conventions, the `--coverage` target.
+Targets are independent — dispatch one subagent per source file (group tiny related files) through a
+**bounded executor pool with a queue**, not fixed batches:
+
+1. **Size the pool**: `min(10, floor(host_cores * 0.3))`, minimum 1.
+   ```bash
+   cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu); pool=$(( cores*30/100 )); pool=$(( pool<1 ? 1 : pool )); pool=$(( pool>10 ? 10 : pool ))
+   ```
+2. **Report before dispatch** — list every target file and the resolved pool size, e.g.:
+   ```
+   Targets (4): src/utils/money.ts, src/composables/useOrderList.js, src/components/Order.vue, src/utils/date.js
+   Pool size: 3 (cores=8, cap=min(10, 30%))
+   ```
+3. **Fill the pool, then top it up on every completion** — queue all targets FIFO, dispatch `min(pool,
+   queue.length)` subagents at once (one Agent call per target, backgrounded). The instant any subagent
+   finishes, immediately dispatch the next queued target so the pool stays full — never wait for the rest
+   of the current pool to finish, and never leave a slot idle while targets remain queued. Report each
+   dispatch (`dispatching <file> (<k>/<total>)`) and each completion (`<file> done (<k>/<total>)`) as they
+   happen. Drain until the queue is empty and every in-flight subagent has returned.
+
+Each subagent receives: the source file, the loaded conventions, the `--coverage` target.
 
 Per target, the subagent:
 1. Reads the source; identifies public functions/methods, branches, edge + error paths.
