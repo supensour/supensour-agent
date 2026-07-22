@@ -28,6 +28,8 @@ Base, language-agnostic conventions for generated tests. Language modules
 ## Output discipline
 
 - Follow the **language module's** file naming + location convention exactly.
-- Match the project's existing test style (framework, import order, helpers) before introducing new
-  patterns — read a neighboring test first.
+- Read a neighboring test first to learn the project's style (framework, import order, helpers). Apply
+  it by target: when **adding to an existing test file**, match that file's style even where it diverges
+  from these rules; when **creating a new test file**, these rules and the language module win — follow
+  neighboring style only where it doesn't conflict.
 - A generated test must be runnable as-is: real imports, no `TODO`-only bodies, no placeholder asserts.

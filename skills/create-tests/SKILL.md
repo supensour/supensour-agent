@@ -68,7 +68,12 @@ Load in one parallel batch:
 - Any relevant `rules/<lang>/cases/*.md` whose topic matches the target's behavior (e.g. async/promise
   rejection code → `rules/vue/cases/handling-rejected-promises.md`).
 
-Before writing, **read one neighboring existing test** in the project to match its concrete style.
+Before writing, **read one neighboring existing test** in the project to learn its concrete style. How
+to apply it depends on the target:
+- **Adding to an existing test file** → match that file's concrete style even where it diverges from this
+  skill's rules — stay consistent with the surrounding code you're extending.
+- **Creating a new test file** → this skill's rules and conventions take priority. Follow neighboring
+  style only where it doesn't conflict with them; on any conflict, the skill rules win.
 
 ### Step 2 — Generate (executor pool per target)
 
