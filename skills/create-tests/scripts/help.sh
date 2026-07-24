@@ -14,6 +14,9 @@ Options:
   --files <glob>           Source files to test (repeatable; default: files changed vs --base).
   --base <branch>          Diff base for changed-file detection (default: auto-detect).
   --coverage <target>      Coverage focus, e.g. 100, branches — guides which cases to emphasize.
-  --write                  Write spec files to their convention path (default: print proposed specs).
+  --proposal               Save proposed specs under .supensour/create-tests/ instead of writing
+                           to convention paths (default: write spec files directly).
+  --clean [branch]         Delete saved proposals for a branch (default: current), then exit.
+  --clean-all              Delete all saved proposals (.supensour/create-tests/), then exit.
   --help                   Show this help.
 EOF

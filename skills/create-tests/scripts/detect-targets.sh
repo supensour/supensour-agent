@@ -53,7 +53,7 @@ candidates() {
 candidates | sort -u | while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
-    *.spec.*|*.test.*|*Test.java|*Tests.java|*/test/*|*/tests/*|src/test/*) continue ;;
+    *.spec.*|*.test.*|*Test.java|*Tests.java|*Test.kt|*Tests.kt|*/test/*|*/tests/*|src/test/*) continue ;;
   esac
   l="$(detect_lang "$f")" || true
   [ -z "$l" ] && continue

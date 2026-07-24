@@ -15,6 +15,9 @@ Mockito. Load this, then the relevant `types/<type>.md`, then any matching `case
   e.g. `ConverterUtils.java` → `ConverterUtilsTest.java`.
 - **Location:** `src/test/java/`, **package mirrors the source** (`com.x.utils` source →
   `com.x.utils` test). Same package gives package-private access.
+- **Kotlin sources** (`.kt`): same conventions, mirrored under the Kotlin source set —
+  `src/main/kotlin/<pkg>/Foo.kt` → `src/test/kotlin/<pkg>/FooTest.kt`. JUnit 5 + Mockito usage is
+  otherwise identical (Kotlin-specific idioms like `mockk` are not assumed unless the project uses them).
 
 ## Running + coverage
 

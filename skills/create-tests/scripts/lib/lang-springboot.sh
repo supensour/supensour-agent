@@ -2,17 +2,23 @@
 # lang-springboot.sh — Spring Boot / Java (JUnit5 + Maven) implementation.
 # Uniform interface: springboot_spec_path / springboot_run_tests. Sourced by common.sh.
 
-# springboot_spec_path <source-file> → conventional test path under src/test/java.
-# src/main/java/<pkg>/Foo.java → src/test/java/<pkg>/FooTest.java
+# springboot_spec_path <source-file> → conventional test path under src/test/<java|kotlin>.
+# src/main/java/<pkg>/Foo.java     → src/test/java/<pkg>/FooTest.java
+# src/main/kotlin/<pkg>/Foo.kt     → src/test/kotlin/<pkg>/FooTest.kt
 springboot_spec_path() {
-  local src="$1" rel base dir
-  rel="${src#src/main/java/}"          # strip source root if present
+  local src="$1" rel base dir ext testroot
+  case "$src" in
+    *.kt)   ext=kt;   testroot=src/test/kotlin ;;
+    *)      ext=java; testroot=src/test/java ;;
+  esac
+  rel="${src#src/main/java/}"
+  rel="${rel#src/main/kotlin/}"        # strip source root if present (either layout)
   dir="$(dirname "$rel")"
-  base="$(basename "$rel" .java)"
+  base="$(basename "$rel" ".$ext")"
   if [ "$dir" = "." ]; then
-    printf 'src/test/java/%sTest.java' "$base"
+    printf '%s/%sTest.%s' "$testroot" "$base" "$ext"
   else
-    printf 'src/test/java/%s/%sTest.java' "$dir" "$base"
+    printf '%s/%s/%sTest.%s' "$testroot" "$dir" "$base" "$ext"
   fi
 }
 

@@ -1,7 +1,7 @@
 ---
 name: create-tests
 description: Generate tests for changed or specified source files across languages (Vue/Vitest, Spring Boot/JUnit5, extensible). Per-language conventions and test types (unit now; integration later). Writes minimum-viable specs following the project's naming/location conventions and can run them with scoped coverage. Use for "write tests for this", "create unit tests", "add test coverage for my diff".
-argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <target>] [--write] [--help]"
+argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <target>] [--proposal] [--clean <branch>] [--clean-all] [--help]"
 allowed-tools: Read, Grep, Glob, Bash, Agent
 ---
 
@@ -21,23 +21,33 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 /create-tests --lang springboot            # force language
 /create-tests --type unit                  # test type (default; integration = later)
 /create-tests --coverage 100               # target/focus for coverage
-/create-tests --write                      # write spec files to disk (default: propose/print)
+/create-tests --proposal                   # save proposed specs under .supensour/create-tests/ (default: write to disk)
+/create-tests --clean                      # delete saved proposals for current branch
+/create-tests --clean feature/RANCH-1      # delete saved proposals for a branch
+/create-tests --clean-all                  # delete all saved proposals
 /create-tests --help                       # print usage and exit
 ```
 
-**`--help` runs a script and stops** — no tests generated:
-`bash "<skill-dir>/scripts/help.sh"`, print output, stop.
+**Utility flags run a script and stop** — no tests generated:
+- `--help` → `bash "<skill-dir>/scripts/help.sh"`, print output, stop.
+- `--clean [branch]` → `bash "<skill-dir>/scripts/clean.sh" [branch]` (default: current branch), stop.
+- `--clean-all` → `bash "<skill-dir>/scripts/clean.sh" --all`, stop.
+
+`clean` removes `<repo>/.supensour/create-tests/<branch>/` (saved proposals); `--clean-all` removes the
+whole `.supensour/create-tests/` tree.
 
 ## Input
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--lang <key>` | auto-detect | Force language ruleset: `vue`, `springboot`. Auto-detected from file extensions otherwise |
-| `--type <unit\|integration>` | `unit` | Test type. Only `unit` is supported now; `integration` → note "not yet supported" and stop |
+| `--type <unit\|integration>` | `unit` (or `project.test_type` config hint) | Test type. Only `unit` is supported now; `integration` → note "not yet supported" and stop |
 | `--files <glob>` | changed files | One or more globs (repeatable). Default = source files changed vs `--base` |
 | `--base <branch>` | auto-detect | Diff base for changed-file detection (`origin/HEAD` → `main`/`master`/`develop`) |
 | `--coverage <target>` | — | Coverage focus, e.g. `100`, `branches` — guides which cases to emphasize |
-| `--write` | off | Write spec files to their convention path. Off → print proposed specs for review |
+| `--proposal` | off | Save proposed specs under `.supensour/create-tests/` for review instead of writing to convention paths. Off → write spec files directly |
+| `--clean [branch]` | current branch | Delete saved proposals for a branch, then stop |
+| `--clean-all` | — | Delete all saved proposals (`.supensour/create-tests/`), then stop |
 | `--help` | — | Print usage (`scripts/help.sh`) and stop |
 
 ## Process
@@ -48,7 +58,11 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
    ```bash
    bash "<skill-dir>/scripts/init-config.sh"   # creates <repo>/.supensour/config/config.yaml if missing
    ```
-1. Resolve `--type` (default `unit`). If `integration` → print `Integration tests not yet supported — only --type unit.` and exit.
+1. Resolve `--type`: explicit flag → `project.test_type` config hint → default `unit`:
+   ```bash
+   bash -c '. "<skill-dir>/scripts/lib/common.sh"; proj_get project test_type'
+   ```
+   If `integration` → print `Integration tests not yet supported — only --type unit.` and exit.
 2. Resolve target source files with the script:
    ```bash
    bash "<skill-dir>/scripts/detect-targets.sh" [--files <glob>...] [--base <branch>] [--lang <key>]
@@ -116,14 +130,27 @@ Per target, the subagent:
 
 ### Step 3 — Place or propose
 
-- **`--write`**: write each spec to its convention path:
+- **Default (no `--proposal`)**: write each spec to its convention path:
   ```bash
   # path is derived by the language lib; e.g. vue: test/unit/specs/<rel>.spec.ts,
   # springboot: src/test/java/<pkg>/<Class>Test.java
   ```
   Don't overwrite an existing spec without surfacing it — if the target spec already exists, show a diff
   / append cases rather than clobbering.
-- **Default (no `--write`)**: print each proposed spec with its intended path for review.
+- **`--proposal`**: save specs to disk under `.supensour/create-tests/` instead of the convention path,
+  for review before a real write:
+  1. Resolve the proposal dir **once per run** (not per target):
+     ```bash
+     DIR="$(bash "<skill-dir>/scripts/proposal-dir.sh")"   # .../.supensour/create-tests/<branch>/<timestamp>
+     ```
+  2. For each target, write the **full** proposed spec content to `"$DIR/<spec-path>"`, where
+     `<spec-path>` is the same convention-relative path from Step 2.4 (mirrors the real destination,
+     just rooted under `$DIR`) — create parent dirs as needed. If the target spec already exists in the
+     project, write the full resulting file (existing content + new cases), not just a fragment.
+  3. Write `"$DIR/manifest.md"` — a table of `source file | proposed path | new file / updates existing`.
+  4. Print a summary only (not the full spec bodies): target count, `$DIR`, and the manifest path, e.g.
+     `💾 Proposed 4 spec(s) saved to .supensour/create-tests/<branch>/<timestamp>/ (see manifest.md)`.
+  5. Add `.supensour/create-tests/` to `.gitignore` if not already present.
 
 ### Step 4 — Verify (optional)
 
@@ -160,7 +187,7 @@ As the final user-facing line of the run, print the console watermark:
 
 | Language | Framework | Spec name | Location | Run |
 |----------|-----------|-----------|----------|-----|
-| vue | Vitest + @vue/test-utils | `<name>.spec.ts` | mirror source under test root (e.g. `test/unit/specs/`) | `npm run test:unit -- run <spec> --coverage.include=<src>` |
+| vue | Vitest + @vue/test-utils | `<name>.spec.ts` | mirror source under test root (e.g. `test/unit/specs/`) | `npm run test:unit -- run <spec> --coverage --coverage.include=<src>` |
 | springboot | JUnit 5 + Mockito | `<Class>Test.java` | `src/test/java/` mirroring package | `mvn test -Dtest=<Class>` |
 
 ## Edge cases
@@ -171,3 +198,5 @@ As the final user-facing line of the run, print the console watermark:
 - **Spec already exists**: surface it; propose added/updated cases instead of overwriting silently.
 - **No build system at root** (`run-tests.sh`): script warns (`No package.json`/`No pom.xml`); generation
   still succeeds, verification is skipped.
+- **`--proposal` runs pile up**: each run creates a new `.supensour/create-tests/<branch>/<timestamp>/`
+  dir. Use `--clean [branch]` / `--clean-all` to prune.
