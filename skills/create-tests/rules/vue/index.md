@@ -28,6 +28,14 @@ npm run test:unit -- run <test-file> --coverage --coverage.include="<source-file
 
 Don't re-run after every edit — run once to verify the final result / check coverage.
 
+> Check whether coverage is on by default in the project's vitest/vite config (grep `coverage:`
+> `vite.config.*` `vitest.config.*`). If `coverage.enabled: true` is set, coverage still collects even
+> when the CLI omits `--coverage` — and with `coverage.all: true` it instruments the whole
+> `coverage.include` glob (often all of `src/**`), not just the file under test. So a plain pass/fail
+> sanity run pays the full whole-repo coverage cost. When you don't need coverage numbers yet, pass
+> `--coverage=false` explicitly — never rely on omitting the flag to mean "off." (`vue_run_tests` in
+> `scripts/lib/lang-vue.sh` already does this when called without a source file.)
+
 ## Coverage goals
 
 - **100%** on utility functions and composables.

@@ -56,6 +56,6 @@ vue_run_tests() {
   if [ -n "$src" ]; then
     npm run test:unit -- run "$spec" --coverage --coverage.include="$src"
   else
-    npm run test:unit -- run "$spec"
+    npm run test:unit -- run "$spec" --coverage=false
   fi
 }
