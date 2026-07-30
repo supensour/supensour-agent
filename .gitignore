@@ -14,3 +14,7 @@ Thumbs.db
 # Logs / temp
 *.log
 tmp/
+
+# Supensour skill work dirs (keep .supensour/config/ committable)
+.supensour/review-code/
+.supensour/create-tests/

@@ -1,8 +1,8 @@
 ---
 name: create-tests
 description: Generate tests for changed or specified source files across languages (Vue/Vitest, Spring Boot/JUnit5, extensible). Per-language conventions and test types (unit now; integration later). Writes minimum-viable specs following the project's naming/location conventions and can run them with scoped coverage. Use for "write tests for this", "create unit tests", "add test coverage for my diff".
-argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <target>] [--proposal] [--clean <branch>] [--clean-all] [--help]"
-allowed-tools: Read, Grep, Glob, Bash, Agent
+argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <n>] [--pool <n>] [--analyst-model <key>] [--writer-model <key>] [--no-split] [--executor <file>] [--explain] [--clean <branch>] [--clean-all] [--help]"
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent, Skill
 ---
 
 # create-tests
@@ -10,8 +10,11 @@ allowed-tools: Read, Grep, Glob, Bash, Agent
 Test-generation skill. Reads source files and emits **minimum-viable** tests following each language's
 conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any language.
 
-> **Scripts do the CLI work.** Target detection and test running live in `scripts/`. Call them as
-> `bash "<skill-dir>/scripts/<name>.sh" …` rather than re-emitting commands.
+> **Scripts do the CLI work.** Target detection, coverage scanning, path mapping and test running live in
+> `scripts/`. Call them as `bash "<skill-dir>/scripts/<name>.sh" …` rather than re-emitting commands.
+>
+> **Load only your role's file.** This file is the router; the process lives in `roles/`. Never read a
+> role file that isn't yours — that's the whole point of the split.
 
 ## Invocation
 
@@ -20,11 +23,16 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 /create-tests --files src/utils/money.ts   # tests for specific files
 /create-tests --lang springboot            # force language
 /create-tests --type unit                  # test type (default; integration = later)
-/create-tests --coverage 100               # target/focus for coverage
-/create-tests --proposal                   # save proposed specs under .supensour/create-tests/ (default: write to disk)
-/create-tests --clean                      # delete saved proposals for current branch
-/create-tests --clean feature/RANCH-1      # delete saved proposals for a branch
-/create-tests --clean-all                  # delete all saved proposals
+/create-tests --coverage 90                # numeric gate threshold, every metric (default 100)
+/create-tests --pool 4                     # max concurrent analysts (default: min(10, 30% of cores))
+/create-tests --analyst-model sonnet       # model for analysts (default: sonnet; alias --agent-model)
+/create-tests --writer-model haiku         # model for writers (default: sonnet)
+/create-tests --no-split                   # analyst writes the spec itself, no writer hop
+/create-tests --executor src/utils/money.ts  # analyst mode: one file, no target detection
+/create-tests --explain                    # print resolved config (targets, gate, commands, models) and stop
+/create-tests --clean                      # delete saved plans for current branch
+/create-tests --clean feature/RANCH-1      # …for a branch
+/create-tests --clean-all                  # …for every branch
 /create-tests --help                       # print usage and exit
 ```
 
@@ -33,8 +41,9 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 - `--clean [branch]` → `bash "<skill-dir>/scripts/clean.sh" [branch]` (default: current branch), stop.
 - `--clean-all` → `bash "<skill-dir>/scripts/clean.sh" --all`, stop.
 
-`clean` removes `<repo>/.supensour/create-tests/<branch>/` (saved proposals); `--clean-all` removes the
-whole `.supensour/create-tests/` tree.
+`clean` removes `<repo>/.supensour/create-tests/<branch>/` (the analyst plan files for that branch);
+`--clean-all` removes the whole `.supensour/create-tests/` tree. Plans are scratch — deleting them never
+touches generated specs.
 
 ## Input
 
@@ -42,146 +51,125 @@ whole `.supensour/create-tests/` tree.
 |------|---------|-------------|
 | `--lang <key>` | auto-detect | Force language ruleset: `vue`, `springboot`. Auto-detected from file extensions otherwise |
 | `--type <unit\|integration>` | `unit` (or `project.test_type` config hint) | Test type. Only `unit` is supported now; `integration` → note "not yet supported" and stop |
-| `--files <glob>` | changed files | One or more globs (repeatable). Default = source files changed vs `--base` |
+| `--files <glob>` | changed files | One or more globs (repeatable) — see [Glob syntax](#glob-syntax). Default = source files changed vs `--base` |
 | `--base <branch>` | auto-detect | Diff base for changed-file detection (`origin/HEAD` → `main`/`master`/`develop`) |
-| `--coverage <target>` | — | Coverage focus, e.g. `100`, `branches` — guides which cases to emphasize |
-| `--proposal` | off | Save proposed specs under `.supensour/create-tests/` for review instead of writing to convention paths. Off → write spec files directly |
-| `--clean [branch]` | current branch | Delete saved proposals for a branch, then stop |
-| `--clean-all` | — | Delete all saved proposals (`.supensour/create-tests/`), then stop |
+| `--coverage <n>` | `100` | **Numeric only.** The coverage bar, applied to **every** metric (vue: statements/branches/functions/lines; springboot: instructions/branches/methods/lines). Used both as the skip-gate threshold and as what the analyst writes cases to reach |
+| `--pool <n>` | `min(10, floor(cores * 0.3))`, min 1 | Max concurrent analyst subagents, global across language groups. `1` = one target at a time |
+| `--analyst-model <key>` | `sonnet` | Model for analyst subagents. `inherit` = session model. Alias: `--agent-model` |
+| `--writer-model <key>` | `sonnet` | Model for writer subagents. `inherit` = session model. Cheaper tiers (`haiku`) are viable — the plan is near-transcription |
+| `--no-split` | off | Skip the writer hop: the analyst writes the spec itself at `--analyst-model` |
+| `--executor <file>` | off | **Analyst mode**: handle exactly this one target (see [Roles](#roles)). Dispatched analysts invoke the skill this way |
+| `--explain` | off | Print the resolved run config — language, targets, coverage-gate verdicts, resolved test commands, pool size, models — and stop before dispatch. No subagents, no writes |
+| `--clean [branch]` | current branch | Delete saved plans for a branch, then stop |
+| `--clean-all` | — | Delete everything under `.supensour/create-tests/`, then stop |
 | `--help` | — | Print usage (`scripts/help.sh`) and stop |
 
-## Process
+Models are passed as the Agent call's `model` parameter — never pinned in the agent definitions, so the
+skill stays host-agnostic.
 
-### Step 0 — Resolve scope
+## Glob syntax
 
-0. **Ensure config exists** — create the per-repo config from a template if absent (idempotent):
-   ```bash
-   bash "<skill-dir>/scripts/init-config.sh"   # creates <repo>/.supensour/config/config.yaml if missing
-   ```
-1. Resolve `--type`: explicit flag → `project.test_type` config hint → default `unit`:
-   ```bash
-   bash -c '. "<skill-dir>/scripts/lib/common.sh"; proj_get project test_type'
-   ```
-   If `integration` → print `Integration tests not yet supported — only --type unit.` and exit.
-2. Resolve target source files with the script:
-   ```bash
-   bash "<skill-dir>/scripts/detect-targets.sh" [--files <glob>...] [--base <branch>] [--lang <key>]
-   ```
-   Prints one source path per line (existing tests/specs filtered out). Empty → `No source files to test.` and exit.
-   The script reads per-repo hints from `<repo>/.supensour/config/config.yaml` to skip detection:
-   `--lang` defaults to `project.language`, `--base` to `git.base_branch` (then `origin/HEAD`).
-3. Resolve `--lang`: explicit flag → project `project.language` hint → auto-detect from the target
-   extensions (the script already filters per `--lang`; for a mixed set, group targets by language).
+`--files` (and review-code's `--files` / `collect-diff.sh --path`) share one dialect, implemented once in
+`lib/core.sh` (`normalize_globs` / `expand_globs`) — shell-like, **not** git's default pathspec:
 
-### Step 1 — Load conventions
+| Pattern | Matches |
+|---|---|
+| `*` | any run of characters, **does not cross `/`** — `src/*.ts` |
+| `**` | any number of path segments — `src/**/*.vue` |
+| `?` | exactly one character |
+| `[abc]` | one character from the set |
+| `{a,b}` | alternatives — `src/**/*.{ts,vue}` (expanded by us; git pathspec has no braces) |
+| `src/api` or `src/api/` | a directory means its whole subtree (`src/api/**`) |
 
-Load in one parallel batch:
-- `rules/generic.md` (always)
-- `rules/<lang>/index.md` (language entry)
-- `rules/<lang>/types/<type>.md` (e.g. `rules/vue/types/unit.md`)
-- Any relevant `rules/<lang>/cases/*.md` whose topic matches the target's behavior (e.g. async/promise
-  rejection code → `rules/vue/cases/handling-rejected-promises.md`).
+Matching unions tracked files, untracked files on disk, and a literal path — a brand-new source file that
+git has never seen is the common case for `--files`. Quote patterns so the shell doesn't expand them first;
+an unquoted `{a,b}` is expanded by your shell into separate arguments, which still works.
 
-Before writing, **read one neighboring existing test** in the project to learn its concrete style. How
-to apply it depends on the target:
-- **Adding to an existing test file** → match that file's concrete style even where it diverges from this
-  skill's rules — stay consistent with the surrounding code you're extending.
-- **Creating a new test file** → this skill's rules and conventions take priority. Follow neighboring
-  style only where it doesn't conflict with them; on any conflict, the skill rules win.
-
-### Step 2 — Generate (executor pool per target)
-
-Targets are independent — dispatch one subagent per source file (group tiny related files) through a
-**bounded executor pool with a queue**, not fixed batches:
-
-1. **Size the pool**: `min(10, floor(host_cores * 0.3))`, minimum 1.
-   ```bash
-   cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu); pool=$(( cores*30/100 )); pool=$(( pool<1 ? 1 : pool )); pool=$(( pool>10 ? 10 : pool ))
-   ```
-2. **Report before dispatch** — list every target file and the resolved pool size, e.g.:
-   ```
-   Targets (4): src/utils/money.ts, src/composables/useOrderList.js, src/components/Order.vue, src/utils/date.js
-   Pool size: 3 (cores=8, cap=min(10, 30%))
-   ```
-3. **Fill the pool, then top it up on every completion** — queue all targets FIFO, dispatch `min(pool,
-   queue.length)` subagents at once (one Agent call per target, backgrounded). The instant any subagent
-   finishes, immediately dispatch the next queued target so the pool stays full — never wait for the rest
-   of the current pool to finish, and never leave a slot idle while targets remain queued. Report each
-   dispatch (`dispatching <file> (<k>/<total>)`) and each completion (`<file> done (<k>/<total>)`) as they
-   happen. Drain until the queue is empty and every in-flight subagent has returned.
-
-Each subagent receives: the source file, the loaded conventions, the `--coverage` target.
-
-Per target, the subagent:
-1. Reads the source; identifies public functions/methods, branches, edge + error paths.
-2. Derives **minimum-viable** cases — enough to cover uncovered lines/branches/functions + critical
-   edge/error cases. No redundant permutations.
-3. Emits a complete, runnable spec following the language convention (imports real, no placeholder asserts).
-4. Computes the spec's target path via the language lib mapping (see below).
-5. Applies the **watermark** — placement depends on whether the target file is new or pre-existing.
-   Get the text from `bash "<skill-dir>/scripts/watermark.sh"` (configurable). A file counts as
-   **skill-created** if it already contains the watermark (search the file for `supensour:create-tests`).
-   - **New test file/class** → watermark as the file/class header.
-   - **Adding tests to an existing file NOT created by this skill** → watermark per **new test unit**
-     (Java: above the new method; Vue: above each new `it()`/`test()`), not as a file header — never
-     edit/rewrite the existing parts.
-   - **Existing skill-created file** → header already present; just add tests, no per-unit marks.
-   See `rules/<lang>/types/unit.md` for the exact per-language form.
-
-### Step 3 — Place or propose
-
-- **Default (no `--proposal`)**: write each spec to its convention path:
-  ```bash
-  # path is derived by the language lib; e.g. vue: test/unit/specs/<rel>.spec.ts,
-  # springboot: src/test/java/<pkg>/<Class>Test.java
-  ```
-  Don't overwrite an existing spec without surfacing it — if the target spec already exists, show a diff
-  / append cases rather than clobbering.
-- **`--proposal`**: save specs to disk under `.supensour/create-tests/` instead of the convention path,
-  for review before a real write:
-  1. Resolve the proposal dir **once per run** (not per target):
-     ```bash
-     DIR="$(bash "<skill-dir>/scripts/proposal-dir.sh")"   # .../.supensour/create-tests/<branch>/<timestamp>
-     ```
-  2. For each target, write the **full** proposed spec content to `"$DIR/<spec-path>"`, where
-     `<spec-path>` is the same convention-relative path from Step 2.4 (mirrors the real destination,
-     just rooted under `$DIR`) — create parent dirs as needed. If the target spec already exists in the
-     project, write the full resulting file (existing content + new cases), not just a fragment.
-  3. Write `"$DIR/manifest.md"` — a table of `source file | proposed path | new file / updates existing`.
-  4. Print a summary only (not the full spec bodies): target count, `$DIR`, and the manifest path, e.g.
-     `💾 Proposed 4 spec(s) saved to .supensour/create-tests/<branch>/<timestamp>/ (see manifest.md)`.
-  5. Add `.supensour/create-tests/` to `.gitignore` if not already present.
-
-### Step 4 — Verify (optional)
-
-Run the generated test(s) and report pass/coverage:
+**How tests are run** (all roles use the same resolution — never hand-write a runner command):
 ```bash
-bash "<skill-dir>/scripts/run-tests.sh" <lang> <spec-or-class> [--coverage <source-file>]
-# vue        → npm run test:unit -- run <spec> --coverage --coverage.include="<src>"
-# springboot → mvn test -Dtest=<Class>
+bash "<skill-dir>/scripts/test-command.sh" <lang> coverage --spec <spec>... --source <src>...  # print it
+bash "<skill-dir>/scripts/run-tests.sh"    <lang> <spec> [--coverage <source-file>]            # run it
 ```
-Run **once** to verify the final result / check coverage — not after every edit. Report failures with
-exact output; fix and re-run only as needed.
+Resolution order: `project.test_command` / `project.test_command_coverage` in
+`<repo>/.supensour/config/config.yaml` → the `package.json` script that runs vitest (`test:unit`,
+`test:vitest`, `test`, else any script mentioning vitest) → `npx vitest run`; for springboot, `pom.xml` →
+`mvn`, `build.gradle[.kts]` → `./gradlew`. Placeholders in the config commands:
 
-As the final user-facing line of the run, print the console watermark:
-`bash "<skill-dir>/scripts/watermark.sh" --banner`.
+| Placeholder | Expands to |
+|---|---|
+| `{spec}` | test file(s), space-joined |
+| `{classes}` | test class name(s), comma-joined (springboot) |
+| `{coverage_args}` | one scope flag per source (`--coverage.include=a --coverage.include=b`) |
+| `{reporter_args}` | the gate's machine-readable reporter (`--coverage.reporter=json-summary --coverage.reportsDirectory=<tmp>`); empty on plain runs. Omit it and the gate appends the flags at the end — a piped/chained command must place it itself |
+| `{source}` | bare source path(s) — safe only when the run scopes a **single** source; the gate scopes many, so it wants `{coverage_args}` |
 
-## Rule loading
+Per-stack examples live in the generated config and in
+[`examples/project-config.template.yaml`](../../examples/project-config.template.yaml).
+
+**Spec location** follows the test type, not just whatever exists: `unit` → `test/unit/specs` (then
+`test/unit`, `tests/unit`), `integration` → `test/integration` (then `tests/integration`, `test/e2e`). If none
+of those dirs exist, the root that **most** existing specs share wins (ties → shortest path), else the type's
+default. `spec-path.sh --type <t>` / `test-command.sh --type <t>` override the resolved type.
+
+## Roles
+
+Three roles, one chain: **orchestrator → analyst (one per target) → writer (one per attempt)**. Each role
+reads this file plus **only its own** role file, and nothing else.
+
+| Role | Entered by | Reads | Process | Model |
+|------|-----------|-------|---------|-------|
+| **Orchestrator** | `/create-tests` without `--executor` | no rules, no source, no plans, no specs | [`roles/orchestrator.md`](roles/orchestrator.md) | whatever the user is on |
+| **Analyst** | the skill with `--executor <file>` | `rules/*`, the source, one neighbor spec (+ the target spec when appending) | [`roles/analyst.md`](roles/analyst.md) | `--analyst-model` (default `sonnet`) |
+| **Writer** | dispatch prompt from an analyst (agent `supensour-test-writer`) | the plan file + the source | [`roles/writer.md`](roles/writer.md) | `--writer-model` (default `sonnet`) |
+
+Token discipline that makes this worth it:
+- The orchestrator never ingests a plan or a spec body — its context stays flat no matter how many targets.
+- Rules are loaded **once per target**, by the analyst only. The writer loads **no rules at all**: the plan
+  carries the concrete form (exact spec path, watermark line verbatim, imports, case titles, mocks).
+- Every report between roles is one fixed-format line. No prose, no spec bodies, no restating the plan.
+
+Agent types: `supensour-test-analyst`, `supensour-test-writer`. If the host doesn't resolve them (non
+Claude Code plugin hosts), dispatch `general-purpose` with the same prompt and the same `model` parameter —
+behavior is identical.
+
+## Safety — never destroy other agents' work
+
+Concurrent agents share one working tree, so one destructive command can delete every spec written so far.
+Hard rules for **all roles**:
+
+- **Banned, no exceptions**: `git clean`, `git reset --hard`, `git checkout -- .`, `git restore`,
+  `git stash`, `git rm`, branch/ref switching, `rm -rf`, and any command that deletes or reverts files the
+  run did not itself create. Cleaning up untracked junk is **never** part of this skill's job.
+- **Protect on write**: the moment a spec is written, index it so `git clean -fd` cannot reach it:
+  ```bash
+  bash "<skill-dir>/scripts/protect.sh" <spec-path>...   # git add -N (intent-to-add, content stays unstaged)
+  ```
+  Writer/analyst run it on their own spec; the orchestrator re-runs it over every reported spec at the end.
+- **Integrity check**: `protect.sh` prints `✖ MISSING <path>` and exits `3` for any path absent from disk.
+  A spec reported as written but missing is an incident: report it explicitly (which files, when), then
+  re-dispatch those targets — never silently succeed. It prints `⚠ UNPROTECTED <path>` when a spec can't be
+  indexed (usually gitignored) — surface that in the run summary; that file is still deletable.
+- Fixing a failing spec means editing that spec. Never "reset the repo to a clean state" to recover.
+- `.gitignore` changes go through the script, never by hand:
+  ```bash
+  bash "<skill-dir>/scripts/gitignore.sh" '.supensour/create-tests/'   # idempotent, logs what it appends
+  ```
+  (`plan-path.sh` already calls it for you.)
+- Commands from a target repo's `project.test_command*` are **allowlisted** before they run (`npm`, `yarn`,
+  `pnpm`, `bun`, `npx`, `node`, `vitest`, `jest`, `mvn`, `gradle`, `gradlew`, `make`). Anything else aborts
+  with the offending word — a cloned repo can't make this skill run arbitrary shell. Extend deliberately via
+  `SUPENSOUR_ALLOWED_CMDS` if you trust the repo.
+- **Dispatch rule**: only the orchestrator and the analyst may call the Agent tool — the orchestrator
+  dispatches analysts, an analyst dispatches **at most 3 writers for its own single target, one at a
+  time**. Writers never dispatch. Nobody touches a file outside its own target's spec.
+
+## Rule loading (analyst only)
 
 1. Always load `rules/generic.md`.
 2. Resolve language from extensions (or `--lang`):
    - `.vue`, `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` → `vue`
    - `.java`, `.kt` → `springboot`
 3. Load `rules/<lang>/index.md` + `rules/<lang>/types/<type>.md` + matching `rules/<lang>/cases/*`.
-
-## Extending
-
-- **New language**: create `rules/<lang>/index.md` + `rules/<lang>/types/unit.md` (+ `cases/` as needed),
-  and `scripts/lib/lang-<lang>.sh` exposing `<lang>_spec_path` and `<lang>_run_tests` (same signatures
-  as `lang-vue.sh` / `lang-springboot.sh`). Register the extensions in `detect_lang` in
-  `scripts/lib/common.sh`. No other file changes — `lang_dispatch` routes by language.
-- **New test type**: add `rules/<lang>/types/<type>.md` and accept the `--type` value (e.g.
-  `integration` → `types/integration.md` with slice/`@SpringBootTest` or component-mount conventions).
 
 ## Conventions summary (see rules/ for detail)
 
@@ -190,13 +178,33 @@ As the final user-facing line of the run, print the console watermark:
 | vue | Vitest + @vue/test-utils | `<name>.spec.ts` | mirror source under test root (e.g. `test/unit/specs/`) | `npm run test:unit -- run <spec> --coverage --coverage.include=<src>` |
 | springboot | JUnit 5 + Mockito | `<Class>Test.java` | `src/test/java/` mirroring package | `mvn test -Dtest=<Class>` |
 
+## Extending
+
+- **New language**: create `rules/<lang>/index.md` + `rules/<lang>/types/unit.md` (+ `cases/` as needed),
+  and `scripts/lib/lang-<lang>.sh` exposing `<lang>_spec_path`, `<lang>_run_tests` and
+  `<lang>_coverage_scan` (same signatures as `lang-vue.sh` / `lang-springboot.sh`; a `coverage_scan` that
+  emits `GENERATE` for every input is a valid no-op). Register the extensions in `detect_lang` in
+  `scripts/lib/common.sh`. No other file changes — `lang_dispatch` routes by language.
+- **New test type**: add `rules/<lang>/types/<type>.md` and accept the `--type` value.
+- **New role**: add `roles/<role>.md` and a matching `agents/supensour-test-<role>.md` (no `model:` in the
+  frontmatter — the dispatcher passes it).
+
 ## Edge cases
 
 - **No targets**: `No source files to test.` and exit.
-- **Mixed languages in target set**: group by language; run Step 1–2 per language group.
+- **All targets already covered**: coverage gate returns all `SKIP` → report and exit, no subagents.
+- **Coverage scan unusable** (no build system, failing existing specs, no JaCoCo/`json-summary`, no
+  `node`): every target is marked `GENERATE` — the gate never skips on missing data.
+- **Mixed languages in target set**: group by language for the gate; the dispatch pool stays **global**
+  (one pool for the whole run, not one per group). The analyst resolves rules per target anyway.
 - **`--type integration`**: not yet supported — note and exit (structure is ready under `types/`).
-- **Spec already exists**: surface it; propose added/updated cases instead of overwriting silently.
-- **No build system at root** (`run-tests.sh`): script warns (`No package.json`/`No pom.xml`); generation
-  still succeeds, verification is skipped.
-- **`--proposal` runs pile up**: each run creates a new `.supensour/create-tests/<branch>/<timestamp>/`
-  dir. Use `--clean [branch]` / `--clean-all` to prune.
+  Both the orchestrator **and** the analyst check this, so a direct `--executor` call bails too.
+- **Spec already exists**: surface it; append cases instead of overwriting silently. The analyst reads the
+  existing spec before planning (`new|append` in every report line).
+- **Source files under a test path** (e.g. `src/tests/factory.js`): `detect-targets.sh` skips them and logs
+  `⚠ skipped N candidate(s) matching test paths: …` — pass them via `--files` if they really are sources.
+- **Spec vanished after being reported written**: destructive-git incident — report which files and
+  re-dispatch those targets. Do not report success.
+- **Writer keeps failing**: bounded — 2 runs per dispatch, ≤2 plan revisions, then the analyst repairs the
+  spec itself, then `FAIL` with exact output. Never an open loop.
+- **`--executor` with more than one file**: unsupported — one analyst, one target.

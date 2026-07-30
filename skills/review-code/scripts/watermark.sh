@@ -10,5 +10,6 @@ set -euo pipefail
 case "${1:-}" in
   --banner) printf '🤖 %s\n' "$WATERMARK" ;;
   --plain)  printf '%s\n' "$WATERMARK" ;;
+  --author) printf '%s\n' "$AUTHOR_TEXT" ;;
   *)        printf '%s\n' "$WATERMARK_MD" ;;
 esac

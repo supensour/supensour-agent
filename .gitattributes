@@ -1,0 +1,15 @@
+# Line endings are part of the contract: every script here runs under bash (Linux, macOS,
+# Git Bash / WSL on Windows). A CRLF checkout turns `#!/usr/bin/env bash` into
+# `#!/usr/bin/env bash\r` and every script dies with "bad interpreter" — so scripts and
+# docs are always checked out with LF, whatever core.autocrlf says locally.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+
+# Windows-only wrappers a repo config may reference keep CRLF (cmd.exe needs it).
+*.bat text eol=crlf
+*.cmd text eol=crlf

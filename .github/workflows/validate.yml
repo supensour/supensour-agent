@@ -1,0 +1,65 @@
+name: validate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The portability contract, enforced: every supported OS runs the same two scripts.
+  # windows-latest runs them under Git Bash (`shell: bash`), which is exactly how a
+  # Windows user runs the skills.
+  checks:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # smoke.sh diffs HEAD~1..HEAD
+
+      # macOS ships bash 3.2 (2007) as /bin/bash. lib/core.sh requires 4+, so install it
+      # here — and note the smoke test still exercises 3.2 to prove the guard fires.
+      - name: Install bash 4+ (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Versions
+        run: |
+          bash --version | head -1
+          git --version
+          jq --version || echo "jq: absent"
+
+      - name: Static validation
+        run: bash scripts/validate.sh --strict
+
+      - name: Smoke tests
+        run: bash scripts/smoke.sh
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      # SC1091 = "not following sourced file"; every script sources its skill's common.sh
+      # by a runtime-resolved path, which shellcheck cannot follow. Severity warning:
+      # style notes are advisory, warnings are not.
+      - name: Lint
+        run: |
+          mapfile -t files < <(git ls-files '*.sh')
+          printf 'linting %d script(s)\n' "${#files[@]}"
+          shellcheck -S warning -e SC1091 "${files[@]}"

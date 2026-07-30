@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# clean.sh — remove locally saved --proposal runs.
-#   clean.sh [<branch>]   remove saved proposals for <branch> (default: current branch)
-#   clean.sh --all        remove all saved proposals for every branch
+# clean.sh — remove locally saved analyst plan files.
+#   clean.sh [<branch>]   remove saved plans for <branch> (default: current branch)
+#   clean.sh --all        remove saved plans for every branch
 #
-# Saved proposals live in <repo-root>/.supensour/create-tests/.
+# Plans live in <repo-root>/.supensour/create-tests/<branch>/.plans/ — scratch handoff files
+# between analyst and writer. Removing them never touches generated spec files.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "Not a git repository."
 BASE="$ROOT/.supensour/create-tests"
 
-[ -d "$BASE" ] || { log "Nothing to clean — no saved proposals at $BASE"; exit 0; }
+[ -d "$BASE" ] || { log "Nothing to clean — no saved plans at $BASE"; exit 0; }
 
 case "${1:-}" in
   --all)
     rm -rf "$BASE"
-    log "🧹 Removed all saved proposals ($BASE)"
+    log "🧹 Removed all saved plans ($BASE)"
     ;;
   -*)
     die "clean.sh: unknown option '$1' (use --all or a branch name)"
@@ -28,6 +29,6 @@ case "${1:-}" in
     dir="$BASE/$safe"
     [ -d "$dir" ] || { log "Nothing to clean for branch '$branch' ($dir absent)"; exit 0; }
     rm -rf "$dir"
-    log "🧹 Removed saved proposals for branch '$branch' ($dir)"
+    log "🧹 Removed saved plans for branch '$branch' ($dir)"
     ;;
 esac

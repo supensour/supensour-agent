@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# common.sh — shared helpers for review-code scripts.
+# shellcheck disable=SC2034  # identity vars and platform fields (HOST/API_VERSION/CLI) are consumed by lib/core.sh and the platform-*.sh libs
+# common.sh — review-code specifics on top of the shared core.
 # Sourced by every top-level script and by the platform-*.sh libs.
-# Responsibilities: locate the skill dir, load config (global supensour.yaml +
-# project .supensour/config/config.yaml), resolve the platform + token + repo
-# identity, and dispatch to the matched platform lib.
+#
+# Shared helpers (logging, global/project config readers, watermark/author resolution,
+# .gitignore maintenance, command allowlist) live in <plugin-root>/lib/core.sh — edit
+# them there, not here. This file adds: the comment marker/fingerprint scheme, platform
+# + token + repo resolution, and platform dispatch.
 #
 # Config:
 #   - Global  ~/.supensour/config/supensour.yaml   → platform catalog (default + platforms).
@@ -35,14 +38,27 @@ MARKER="<!-- ${MARKER_PREFIX} -->"
 # Placeholder {skillName} → "supensour:review-code". Two rendered forms are set at
 # end of file: WATERMARK (plain, for console) and WATERMARK_MD ({skillName} as a
 # markdown link to watermark_url, for the .md report + PR/MR comments).
+SKILL_KEY="review-code"
 SKILL_NAME="supensour:review-code"
-WATERMARK_DEFAULT="Generated with {skillName} · suprayan@supensour · github.com/supensour/supensour-agent"
+WATERMARK_DEFAULT="Reviewed with skill {skillName} · suprayan@supensour · github.com/supensour/supensour-agent"
 WATERMARK_URL_DEFAULT="https://github.com/supensour/supensour-agent"
+AUTHOR_DEFAULT="supensour-agent@review-code"
 
-# 12-char content hash (portable: shasum on macOS, sha1sum on Linux).
+# 12-char content hash. Portable across macOS (shasum), Linux (sha1sum or shasum) and
+# Git Bash (shasum). Resolve the binary FIRST: an `A && A-run || B-run` chain would run
+# B after A had already consumed stdin, silently producing an empty hash — i.e. a wrong
+# comment fingerprint, which means duplicate PR comments.
+_sha_cmd() {
+  local c
+  for c in shasum sha1sum sha1; do
+    command -v "$c" >/dev/null 2>&1 && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
 _hash12() {
-  local out
-  out="$( { command -v shasum >/dev/null 2>&1 && shasum || sha1sum; } <<<"$1" )"
+  local sha out
+  sha="$(_sha_cmd)" || die "No SHA-1 tool found (shasum / sha1sum). Install one: $(_install_hint shasum)"
+  out="$("$sha" <<<"$1")"
   printf '%s' "${out%% *}" | cut -c1-12
 }
 
@@ -73,91 +89,31 @@ _COMMON_SRC="${BASH_SOURCE[0]}"
 LIB_DIR="$(cd "$(dirname "$_COMMON_SRC")" && pwd)"
 SCRIPTS_DIR="$(cd "$LIB_DIR/.." && pwd)"
 SKILL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
-export SKILL_DIR SCRIPTS_DIR LIB_DIR MARKER MARKER_PREFIX WATERMARK
+export SKILL_DIR SCRIPTS_DIR LIB_DIR MARKER MARKER_PREFIX
 
-# --- Logging ----------------------------------------------------------------
-log()  { printf '%s\n' "$*" >&2; }
-warn() { printf '⚠ %s\n' "$*" >&2; }
-die()  { printf '✖ %s\n' "$*" >&2; exit 1; }
+# --- Shared core ------------------------------------------------------------
+# Provides: log/warn/die, _clean_val, cfg_* / proj_* readers, ensure_project_config,
+# ensure_gitignore, watermark resolution (resolve_attribution), run_checked.
+_CORE="$SKILL_DIR/../../lib/core.sh"
+[ -f "$_CORE" ] || { printf '✖ Missing shared lib: %s (incomplete install of the supensour plugin)\n' "$_CORE" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$_CORE"
 
 # Split a curl response captured with `-w '\n%{http_code}'`:
 #   _body → everything except the final line; _code → the final line (HTTP status).
 _body() { sed '$d'; }
 _code() { tail -n1; }
 
-# --- Config files -----------------------------------------------------------
-# Global: ~/.supensour/config/supensour.yaml (AI-agnostic, not Claude-specific).
-cfg_file() {
-  [ -f "$HOME/.supensour/config/supensour.yaml" ] && { printf '%s' "$HOME/.supensour/config/supensour.yaml"; return 0; }
-  return 1
-}
-
-# Project: <repo-root>/.supensour/config/config.yaml  (nested git:/project: schema).
-proj_cfg_file() {
-  local root; root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-  [ -n "$root" ] && [ -f "$root/.supensour/config/config.yaml" ] && {
-    printf '%s' "$root/.supensour/config/config.yaml"; return 0; }
-  return 1
-}
-
-# Trim a scalar YAML value: drop a trailing ` # comment`, surrounding quotes, and whitespace.
-_clean_val() {
-  sed -E 's/[[:space:]]+#.*$//; s/\r//g; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^["'"'"']//; s/["'"'"']$//'
-}
-
-# Global config is nested under a top-level `platform:` key:
-#   platform:
-#     default: <key>
-#     platforms:
-#       <key>:                       # 4-space indent
-#         type: ...                  # 6-space indent
-#         token_env_alternatives:
-#           - X                      # 8-space indent
-
-# `platform.default` key.
-cfg_default() {
-  local f; f="$(cfg_file)" || return 1
-  awk '/^  default:/{sub(/^  default:/,""); print; exit}' "$f" | _clean_val
-}
-
-# cfg_field <platform-key> <field> — scalar field inside platform.platforms.<key>.
-cfg_field() {
-  local f key="$1" field="$2"; f="$(cfg_file)" || return 1
-  awk -v key="$key" -v field="$field" '
-    $0 ~ "^    " key ":[[:space:]]*$" { inblk=1; next }
-    inblk && /^    [^[:space:]]/      { inblk=0 }
-    inblk && $0 ~ "^      " field ":" {
-      sub("^      " field ":", "")
-      print; exit
-    }
-  ' "$f" | _clean_val
-}
-
-# cfg_list <platform-key> <field> — block-list values (`- item`) inside platform.platforms.<key>.
-cfg_list() {
-  local f key="$1" field="$2"; f="$(cfg_file)" || return 1
-  awk -v key="$key" -v field="$field" '
-    $0 ~ "^    " key ":[[:space:]]*$" { inblk=1; next }
-    inblk && /^    [^[:space:]]/      { inblk=0 }
-    inblk && $0 ~ "^      " field ":"  { inlist=1; next }
-    inlist && /^        - /            { sub(/^        - /,""); print; next }
-    inlist && /^      [^[:space:]-]/   { inlist=0 }
-  ' "$f" | _clean_val
-}
-
-# proj_get <section> <field> — scalar from project config (section = git|project).
-# Empty (rc 1) if no project config or field absent.
-proj_get() {
-  local f section="$1" field="$2"; f="$(proj_cfg_file)" || return 1
-  awk -v section="$section" -v field="$field" '
-    $0 ~ "^" section ":[[:space:]]*$" { inblk=1; next }
-    inblk && /^[^[:space:]]/          { inblk=0 }
-    inblk && $0 ~ "^  " field ":" {
-      sub("^  " field ":", "")
-      print; exit
-    }
-  ' "$f" | _clean_val
-}
+# Config readers come from lib/core.sh:
+#   cfg_file / cfg_default / cfg_field / cfg_list  → ~/.supensour/config/supensour.yaml
+#     platform:
+#       default: <key>
+#       platforms:
+#         <key>:                       # 4-space indent
+#           type: ...                  # 6-space indent
+#           token_env_alternatives:
+#             - X                      # 8-space indent
+#   proj_cfg_file / proj_get                       → <repo>/.supensour/config/config.yaml
 
 # --- Platform resolution ----------------------------------------------------
 # init_platform [override-key]
@@ -166,6 +122,9 @@ proj_get() {
 # and sources the matching platform-<type>.sh.
 init_platform() {
   local override="${1:-}"
+  # Every platform lib parses API JSON with jq. Fail here with an install hint rather
+  # than `jq: command not found` from inside a request, possibly after a worktree exists.
+  require_cmd jq curl
   # Per-repo hints (skip detection).
   PROJ_LANGUAGE="$(proj_get project language 2>/dev/null || true)"
   PROJ_BASE_BRANCH="$(proj_get git base_branch 2>/dev/null || true)"
@@ -290,63 +249,9 @@ EOF
   log "📝 Created $f — review host + token_env."
 }
 
-# ensure_project_config — create <repo>/.supensour/config/config.yaml if absent (commented hints).
-ensure_project_config() {
-  local root; root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-  [ -z "$root" ] && return 0
-  local f="$root/.supensour/config/config.yaml"
-  [ -f "$f" ] && return 0
-  mkdir -p "$(dirname "$f")"
-  cat > "$f" <<'EOF'
-# yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
-# Supensour per-repo hints (optional). Uncomment + set to skip detection.
-git:
-  # platform: gitlab-ce          # key into ~/.supensour/config/supensour.yaml platforms
-  # token_env: GITLAB_TOKEN      # override the platform's token_env for this repo
-  # base_branch: develop         # default diff base
-project:
-  # language: vue                # default --lang (review-code / create-tests)
-  # test_type: unit              # default --type (create-tests)
-EOF
-  log "📝 Created $f — uncomment hints as needed."
-}
+# ensure_project_config / project_config_template live in lib/core.sh (shared template).
 
-# --- Watermark resolution ---------------------------------------------------
-# Repo config: <repo-root>/supensour-config.yaml (sits two levels above SKILL_DIR).
-wm_cfg_file() {
-  local f="$SKILL_DIR/../../supensour-config.yaml"
-  [ -f "$f" ] && { printf '%s' "$f"; return 0; }
-  return 1
-}
-# Top-level `<key>:` scalar (e.g. watermark_template, watermark_url).
-_wm_top() {
-  local f key="$1"; f="$(wm_cfg_file)" || return 1
-  awk -v k="$key" '$0 ~ "^" k ":" {sub("^" k ":",""); print; exit}' "$f" | _clean_val
-}
-# Per-skill `skills.<skill>.<key>`.
-_wm_skill() {
-  local f skill="$1" key="$2"; f="$(wm_cfg_file)" || return 1
-  awk -v s="$skill" -v k="$key" '
-    /^skills:[[:space:]]*$/        { ins=1; next }
-    ins && /^[^[:space:]]/         { ins=0 }
-    ins && $0 ~ "^  " s ":[[:space:]]*$" { inb=1; next }
-    inb && /^  [^[:space:]]/       { inb=0 }
-    inb && $0 ~ "^    " k ":"      { sub("^    " k ":",""); print; exit }
-  ' "$f" | _clean_val
-}
-# _wm_resolve <key> <default> — per-skill > top-level > built-in default.
-_wm_resolve() {
-  local key="$1" def="$2" v
-  v="$(_wm_skill review-code "$key" 2>/dev/null || true)"
-  [ -z "$v" ] && v="$(_wm_top "$key" 2>/dev/null || true)"
-  [ -z "$v" ] && v="$def"
-  printf '%s' "$v"
-}
-# Resolve the raw template + url once, then render two forms:
-#   WATERMARK     plain text     — {skillName} → SKILL_NAME              (console)
-#   WATERMARK_MD  markdown       — {skillName} → [SKILL_NAME](url)       (.md report + comments)
-_WM_TPL="$(_wm_resolve watermark_template "$WATERMARK_DEFAULT")"
-_WM_URL="$(_wm_resolve watermark_url "$WATERMARK_URL_DEFAULT")"
-WATERMARK="${_WM_TPL//\{skillName\}/$SKILL_NAME}"
-WATERMARK_MD="${_WM_TPL//\{skillName\}/[$SKILL_NAME]($_WM_URL)}"
-export WATERMARK WATERMARK_MD SKILL_NAME
+# --- Attribution ------------------------------------------------------------
+# Sets WATERMARK (plain, console) and WATERMARK_MD ({skillName} as a markdown link,
+# used in the .md report + PR/MR comments) from supensour-config.yaml, plus AUTHOR_TEXT.
+resolve_attribution

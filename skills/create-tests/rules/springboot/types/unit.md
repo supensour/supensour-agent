@@ -6,23 +6,23 @@ the Spring context — plain JUnit + Mockito. (Slice/integration tests like `@We
 
 ## Watermark placement
 
-Watermark text from `bash scripts/watermark.sh`; `@author` value from `bash scripts/watermark.sh --author`
-(both configurable in `<repo-root>/supensour-config.yaml`). Defaults shown below.
+**Never hardcode either value** — both are configurable in `<repo-root>/supensour-config.yaml`.
+`WM` = output of `bash scripts/watermark.sh`; `AUTHOR` = output of `bash scripts/watermark.sh --author`.
 
 - **New test class** → class-level Javadoc with the watermark + `@author`, directly above the class:
   ```java
   /**
-   * Generated with skill supensour:create-tests · suprayan@supensour · github.com/supensour/supensour-agent
+   * <output of scripts/watermark.sh>
    *
-   * @author supensour-agent@create-tests
+   * @author <output of scripts/watermark.sh --author>
    */
   @ExtendWith(MockitoExtension.class)
   class OrderServiceTest { ... }
   ```
-- **New `@Test` method added to an EXISTING class not created by this skill** → a one-line comment with
-  the watermark directly above the new method; leave the rest of the class untouched:
+- **New `@Test` method added to an EXISTING class not created by this skill** → a one-line `//` comment
+  with the watermark directly above the new method; leave the rest of the class untouched:
   ```java
-  // Generated with skill supensour:create-tests · suprayan@supensour
+  // <output of scripts/watermark.sh>
   @Test
   @DisplayName("rejects negative amount")
   void rejectsNegative() { ... }
@@ -49,9 +49,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Generated with skill supensour:create-tests · suprayan@supensour · github.com/supensour/supensour-agent
+ * <output of scripts/watermark.sh>
  *
- * @author supensour-agent@create-tests
+ * @author <output of scripts/watermark.sh --author>
  */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {

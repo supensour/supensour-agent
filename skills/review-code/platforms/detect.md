@@ -26,7 +26,7 @@ bash "$SKILL_DIR/scripts/detect-platform.sh" [--platform <key>]
           - MY_GITLAB_TOKEN
   ```
 - **Per-repo hints** — `<repo>/.supensour/config/config.yaml` (nested), all optional, each skips a
-  detection. Schema: `schemas/project-config.schema.json` (see `examples/project-config.yaml`):
+  detection. Schema: `schemas/project-config.schema.json` (template: `examples/project-config.template.yaml`):
   ```yaml
   git:
     platform: gitlab-ce                  # key into the global catalog → skip platform auto-detect

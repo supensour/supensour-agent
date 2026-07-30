@@ -37,7 +37,14 @@ gitlab_post_summary() {
   payload="$(jq -n --arg b "$(decorate_body "$2")" '{body:$b}')"
   resp="$(_gl_api POST "/merge_requests/$mr/notes" -d "$payload")"
   code="$(printf '%s' "$resp" | _code)"
-  [ "$code" = 201 ] && printf '%s' "$resp" | _body | jq -r '.id' || { warn "GitLab summary post failed (HTTP $code)"; return 1; }
+  # if/else, not `A && B || C`: with the chain form a 201 whose body lacks id would take
+  # the failure branch, and the caller would re-post an already-posted comment.
+  if [ "$code" = 201 ]; then
+    printf '%s' "$resp" | _body | jq -r '.id // empty'
+    return 0
+  fi
+  warn "GitLab summary post failed (HTTP $code)"
+  return 1
 }
 
 gitlab_post_inline() {
