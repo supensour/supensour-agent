@@ -85,9 +85,11 @@ _install_hint() {
 # where `declare -A` is rejected and `${map[$key]}` silently degrades to arithmetic
 # indexing — i.e. wrong dedup, not a crash. Fail loudly here instead, in the file
 # everything sources. Linux, WSL and Git Bash (4.4+) all satisfy it.
+# The floor is the variable, not a parameter: nothing passes one, and an unused optional
+# argument only invites a caller to think it can lower the bar per-script.
 SUPENSOUR_BASH_MIN="${SUPENSOUR_BASH_MIN:-4}"
 require_bash() {
-  local want="${1:-$SUPENSOUR_BASH_MIN}" have="${BASH_VERSINFO[0]:-0}"
+  local want="$SUPENSOUR_BASH_MIN" have="${BASH_VERSINFO[0]:-0}"
   [ "$have" -ge "$want" ] && return 0
   printf '✖ bash %s+ required, found %s (%s).\n' \
     "$want" "${BASH_VERSION:-unknown}" "${BASH:-bash}" >&2

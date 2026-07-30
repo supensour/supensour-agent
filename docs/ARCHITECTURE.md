@@ -216,7 +216,8 @@ Static only — nothing is installed and no skill runs. It checks:
 13. platform libs are at dispatch parity (every `platform_dispatch <fn>` implemented by all of them),
     `init_platform` still calls `require_cmd jq`, and nothing runs `jq`/`curl` unguarded
 14. the portability contract above: `.gitattributes` pins LF, no CRLF in tracked files, no `ln -s`, no
-    GNU-only flags, bash-4 constructs only where `require_bash` has run, install hints beyond Homebrew
+    GNU-only flags, bash-4 constructs only where `require_bash` has run, install hints beyond Homebrew,
+    and no embedded `open()` without `encoding=` (Windows Python defaults to cp1252)
 
 Checks 4–7 and 12–13 are the ones that catch the drift a human review misses: a renamed script, a moved
 rules file, a role dispatching an agent type that was never defined, a doc passing a flag the script

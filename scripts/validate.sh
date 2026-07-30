@@ -34,6 +34,10 @@ sect() { printf '\n── %s\n' "$*"; }
 
 have_python() { command -v python3 >/dev/null 2>&1; }
 
+# Embedded Python reads UTF-8 docs. Windows Python defaults to the ANSI code page
+# (cp1252) and dies on the first ✓/→/· — UTF-8 mode makes every open()/print() UTF-8.
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+
 # --- 1. shell syntax --------------------------------------------------------
 sect "shell syntax"
 count=0
@@ -47,7 +51,7 @@ printf '   %d script(s) parsed\n' "$count"
 sect "JSON manifests + schemas"
 if have_python; then
   while IFS= read -r f; do
-    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null \
+    python3 -c "import json,sys; json.load(open(sys.argv[1], encoding='utf-8'))" "$f" 2>/dev/null \
       || err "invalid JSON: $f"
   done < <(find schemas .claude-plugin .cursor-plugin -name '*.json' -type f 2>/dev/null; ls plugin.json 2>/dev/null)
   printf '   parsed\n'
@@ -63,10 +67,10 @@ if have_python; then
   python3 - <<'PY'
 import json, re, sys
 tpl = 'examples/project-config.template.yaml'
-schema = json.load(open('schemas/project-config.schema.json'))
+schema = json.load(open('schemas/project-config.schema.json', encoding='utf-8'))
 props = schema['properties']
 section, bad = None, []
-for raw in open(tpl):
+for raw in open(tpl, encoding='utf-8'):
     line = raw.rstrip('\n')
     if line.lstrip().startswith('##'):
         continue
@@ -128,17 +132,21 @@ sect "flags: Input table ↔ argument-hint ↔ help.sh"
 if have_python; then
   python3 - <<'PY'
 import glob, re, sys
+from pathlib import Path
 warn = 0
-for skill in sorted(glob.glob('skills/*/SKILL.md')):
-    text = open(skill).read()
-    d = skill.rsplit('/', 1)[0]
+# Path(), not string splitting: glob returns `skills\\create-tests\\SKILL.md` on Windows,
+# where rsplit('/') yields the whole path and every later open() misses.
+for sp in sorted(Path(p) for p in glob.glob('skills/*/SKILL.md')):
+    skill = sp.as_posix()
+    text = sp.read_text(encoding='utf-8')
+    d = sp.parent.as_posix()
     hint = re.search(r'^argument-hint:\s*"(.*)"', text, re.M)
     hint_flags = set(re.findall(r'--[a-z-]+', hint.group(1))) if hint else set()
     table = set()
     for m in re.finditer(r'^\|\s*`(--[a-z-]+)', text, re.M):
         table.add(m.group(1))
     try:
-        help_flags = set(re.findall(r'--[a-z-]+', open(f'{d}/scripts/help.sh').read()))
+        help_flags = set(re.findall(r'--[a-z-]+', Path(d, 'scripts', 'help.sh').read_text(encoding='utf-8')))
     except OSError:
         help_flags = set()
     for flag in sorted(table - hint_flags):
@@ -149,14 +157,19 @@ for skill in sorted(glob.glob('skills/*/SKILL.md')):
         print(f'⚠ {skill}: `{flag}` in argument-hint but not in the Input table', file=sys.stderr); warn += 1
 sys.exit(2 if warn else 0)
 PY
-  [ $? -eq 2 ] && WARNINGS=$((WARNINGS + 1)) || printf '   in sync\n'
+  rc=$?
+  case "$rc" in
+    0) printf '   in sync\n' ;;
+    2) WARNINGS=$((WARNINGS + 1)) ;;
+    *) err "flag-sync check crashed (exit $rc) — see the traceback above" ;;
+  esac
 fi
 
 # --- 9. version agreement ---------------------------------------------------
 sect "plugin versions"
 if have_python; then
-  v1="$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json')).get('version',''))")"
-  v2="$(python3 -c "import json;print(json.load(open('.cursor-plugin/plugin.json')).get('version',''))")"
+  v1="$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json', encoding='utf-8')).get('version',''))")"
+  v2="$(python3 -c "import json;print(json.load(open('.cursor-plugin/plugin.json', encoding='utf-8')).get('version',''))")"
   if [ "$v1" = "$v2" ] && [ -n "$v1" ]; then
     printf '   %s\n' "$v1"
   else
@@ -184,7 +197,7 @@ WHOLE  = {'install_command', 'build_command', 'test_command_all'}   # gate → n
 warn = 0
 
 # The schema must document every key both skills read.
-props = json.load(open('schemas/project-config.schema.json'))['properties']['project']['properties']
+props = json.load(open('schemas/project-config.schema.json', encoding='utf-8'))['properties']['project']['properties']
 for key in sorted(SCOPED | WHOLE):
     if key not in props:
         print(f'✖ schemas/project-config.schema.json: project.{key} is undocumented', file=sys.stderr)
@@ -200,7 +213,7 @@ for key in sorted(SCOPED | WHOLE):
             print(f'⚠ schema example for {key} is whole-project but uses {sorted(has)}: {ex}', file=sys.stderr); warn += 1
 
 # Same contract for any value set in the shipped template (commented or not).
-tpl = open('examples/project-config.template.yaml').read()
+tpl = open('examples/project-config.template.yaml', encoding='utf-8').read()
 for m in re.finditer(r'^\s*#?\s*([a-z_]+):\s*"([^"]+)"', tpl, re.M):
     key, val = m.group(1), m.group(2)
     if key not in (SCOPED | WHOLE):
@@ -226,19 +239,22 @@ sect "documented script flags ↔ script parsing"
 if have_python; then
   python3 - <<'PY'
 import glob, os, re, sys
+from pathlib import Path
 bad = []
-for skill_dir in sorted(glob.glob('skills/*')):
+# as_posix() throughout: glob returns backslash paths on Windows, and both the messages
+# and the `scripts/<name>.sh` regex below assume forward slashes.
+for skill_dir in sorted(Path(p).as_posix() for p in glob.glob('skills/*')):
     docs = glob.glob(f'{skill_dir}/SKILL.md') + glob.glob(f'{skill_dir}/roles/*.md') \
          + glob.glob(f'{skill_dir}/platforms/*.md')
-    for doc in sorted(docs):
-        for line in open(doc):
+    for doc in sorted(Path(p).as_posix() for p in docs):
+        for line in open(doc, encoding='utf-8'):
             m = re.search(r'scripts/([a-z0-9-]+)\.sh"?(.*)$', line)
             if not m:
                 continue
             script = f'{skill_dir}/scripts/{m.group(1)}.sh'
             if not os.path.exists(script):
                 continue                      # check 4 already reports missing scripts
-            src = open(script).read()
+            src = open(script, encoding='utf-8').read()
             for flag in set(re.findall(r'(?<![-\w])--[a-z][a-z-]+', m.group(2))):
                 # A placeholder list like `[--skip-tests]` still counts: the doc tells an
                 # agent it may pass it.
@@ -250,7 +266,11 @@ for b in sorted(set(bad)):
 sys.exit(1 if bad else 0)
 PY
   rc=$?
-  if [ "$rc" -eq 0 ]; then printf '   every documented flag is parsed\n'; else ERRORS=$((ERRORS + 1)); fi
+  case "$rc" in
+    0) printf '   every documented flag is parsed\n' ;;
+    1) ERRORS=$((ERRORS + 1)) ;;                       # findings, already printed
+    *) err "documented-flag check crashed (exit $rc) — see the traceback above" ;;
+  esac
 fi
 
 # --- 13. platform parity + external-tool guards ------------------------------
@@ -328,6 +348,13 @@ while IFS= read -r f; do
   grep -qE '(lib/common\.sh|lib/core\.sh)' "$f" \
     || err "$f uses a bash-4 construct (declare -A / globstar / mapfile) without sourcing common.sh (no require_bash guard)"
 done < <(grep -rlE 'declare -A|shopt -s [a-z ]*globstar|mapfile|readarray' lib skills scripts 2>/dev/null | sort -u)
+
+# Embedded Python must never rely on the platform's default encoding: on Windows that is
+# the ANSI code page, and every doc here contains ✓ / → / ·. This check exists because
+# CI's windows job died on exactly that.
+while IFS= read -r hit; do
+  [ -n "$hit" ] && err "Python open() without encoding= (breaks on Windows cp1252): $hit"
+done < <(grep -nE '(^|[^_a-z])open\(' scripts/*.sh 2>/dev/null | grep -v 'encoding=' | grep -v '^[^:]*:[0-9]*: *#' || true)
 
 # Install hints must cover more than Homebrew.
 if [ -f lib/core.sh ]; then
