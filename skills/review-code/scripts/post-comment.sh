@@ -16,6 +16,9 @@
 # so a later run can reconcile the comment — dedup / update / resolve — never delete.
 # Pass --fp for a finding so its fallback comment is tracked separately from the summary
 # (default "summary"). For a full review push use reconcile-comments.sh.
+#
+# Exit codes: 0 posted (stdout says at which level) · 4 no token, nothing posted ·
+#             1 usage/platform error.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
@@ -33,7 +36,9 @@ done
 export HEAD_SHA FP
 
 init_platform "$OVERRIDE"
-require_token || { echo failed; exit 0; }
+# Exit 4 = no token. Distinct from 0 (posted) and 1 (hard error) so a caller can branch
+# on the status instead of parsing stdout for the word `failed`.
+require_token || { echo failed; exit 4; }
 
 case "$MODE" in
   summary)

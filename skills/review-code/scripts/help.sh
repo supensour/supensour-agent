@@ -15,6 +15,14 @@ Options:
   --severity <list>      Filter output: critical,high,medium,low,info.
   --lang <key>           Force ruleset: vue, springboot, data-migration, generic.
   --scope <diff|project> diff (default): only diff-attributable findings; project: whole repo.
+  --pool <n>             Max concurrent analyst subagents (default: min(8, 30% of cores)),
+                         global across the run. --pool 1 = one file at a time.
+  --analyst-model <key>  Model for analyst subagents (default: sonnet; 'inherit' = session model).
+                         Alias: --agent-model.
+  --executor <file>      Analyst mode: review exactly this one file, read-only, no dispatch.
+                         Used by dispatched analyst subagents.
+  --explain              Print the resolved run config (platform, PR/MR, base, files, languages,
+                         pool, model, worktree, push mode) and stop. No subagents, no writes.
   --platform <key>       Git platform key from ~/.supensour/config/supensour.yaml.
   --push                 Also post findings as PR/MR comments. Reconciles prior comments
                          (skips unchanged, updates changed, resolves fixed) — never deletes.

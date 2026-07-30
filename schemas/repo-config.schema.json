@@ -9,16 +9,26 @@
     "$schema": { "type": "string" },
     "watermark_template": {
       "type": "string",
-      "description": "Watermark text for skill output. Placeholders: {skillName}."
+      "description": "Watermark text for skill output. Placeholders: {skillName} → e.g. supensour:create-tests.",
+      "examples": [
+        "Generated with skill {skillName} · suprayan@supensour · github.com/supensour/supensour-agent",
+        "Reviewed with skill {skillName} · suprayan@supensour · github.com/supensour/supensour-agent",
+        "{skillName}"
+      ]
     },
     "watermark_url": {
       "type": "string",
       "format": "uri",
-      "description": "In markdown contexts (.md report + PR/MR comments), {skillName} renders as a link to this URL. Console output stays plain. Per-skill `watermark_url` overrides this."
+      "description": "In markdown contexts (.md report + PR/MR comments), {skillName} renders as a link to this URL. Console output stays plain. Per-skill `watermark_url` overrides this.",
+      "examples": [
+        "https://github.com/supensour/supensour-agent",
+        "https://github.com/supensour/supensour-agent/tree/master/skills/review-code"
+      ]
     },
     "author": {
       "type": "string",
-      "description": "Attribution author (e.g. Java @author tag). Per-skill `author` overrides this."
+      "description": "Attribution author (e.g. Java @author tag). Per-skill `author` overrides this.",
+      "examples": ["supensour-agent", "supensour-agent@create-tests", "supensour-agent@review-code"]
     },
     "skills": {
       "type": "object",

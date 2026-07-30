@@ -33,3 +33,15 @@ Base, language-agnostic conventions for generated tests. Language modules
   from these rules; when **creating a new test file**, these rules and the language module win — follow
   neighboring style only where it doesn't conflict.
 - A generated test must be runnable as-is: real imports, no `TODO`-only bodies, no placeholder asserts.
+
+## Working-tree safety
+
+Generation often runs many agents against one shared working tree. Losing a peer's just-written spec is
+worse than any cleanup gain:
+
+- **Never** run `git clean`, `git reset --hard`, `git checkout -- .`, `git restore`, `git stash`,
+  `git rm`, branch/ref switching, or `rm -rf`. Never delete or revert a file you did not create in this
+  run. Tidying untracked files is not part of test generation.
+- Index each spec the moment it is written (`git add -N <spec>`, via `scripts/protect.sh`) so a stray
+  `git clean -fd` elsewhere cannot delete it.
+- Recover from a failing test by editing that test — never by resetting the repository.

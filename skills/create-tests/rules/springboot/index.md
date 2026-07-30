@@ -21,12 +21,19 @@ Mockito. Load this, then the relevant `types/<type>.md`, then any matching `case
 
 ## Running + coverage
 
-Use `scripts/run-tests.sh springboot <ClassName>` (wraps the command below):
+Use `scripts/run-tests.sh springboot <ClassName>` — it resolves the build tool for you
+(`project.test_command` in `<repo>/.supensour/config/config.yaml` → `pom.xml` → `build.gradle[.kts]`).
+`scripts/test-command.sh springboot coverage --spec <TestClass>` prints the resolved command.
 
 ```bash
-mvn test -Dtest=<ClassName>           # single test class
-mvn test -Dtest='<Class1>,<Class2>'   # several
-mvn clean verify                      # full suite + coverage (jacoco if configured)
+# Maven
+mvn test -Dtest=<ClassName>                         # single test class
+mvn test -Dtest='<Class1>,<Class2>'                 # several
+mvn -q test -Dtest=<Classes> jacoco:report          # + coverage report (jacoco if configured)
+
+# Gradle
+./gradlew test --tests <ClassName>
+./gradlew test --tests <Classes> jacocoTestReport   # + coverage report
 ```
 
 Run once to verify; don't re-run after every edit.

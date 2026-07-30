@@ -34,13 +34,12 @@ _default_base() {
 }
 
 # Gather candidate files.
+# --files goes through the shared glob dialect (* ? [] ** {a,b}; a bare directory means
+# its subtree) — see lib/core.sh → expand_globs, which unions tracked, untracked and
+# literal paths. Testing a brand-new (untracked) source file is the common case.
 candidates() {
   if [ "${#GLOBS[@]}" -gt 0 ]; then
-    local g
-    for g in "${GLOBS[@]}"; do
-      # shellcheck disable=SC2086
-      git ls-files -- $g 2>/dev/null || compgen -G "$g" || true
-    done
+    expand_globs "${GLOBS[@]}"
   else
     [ -z "$BASE" ] && BASE="$(_default_base)"
     local ref="$BASE"
@@ -50,13 +49,27 @@ candidates() {
 }
 
 # Filter: drop existing tests/specs; keep source files; apply --lang if set.
-candidates | sort -u | while IFS= read -r f; do
+# Anything dropped for living under a test path is logged (it may be a real source
+# file, e.g. src/tests/factory.js) so a silent skip never looks like full coverage.
+SKIPPED_TEST_PATHS=()
+while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
-    *.spec.*|*.test.*|*Test.java|*Tests.java|*Test.kt|*Tests.kt|*/test/*|*/tests/*|src/test/*) continue ;;
+    *.spec.*|*.test.*|*Test.java|*Tests.java|*Test.kt|*Tests.kt) continue ;;
+    # `src/test/*` used to sit here, but `*/test/*` already covers it — while a
+    # repo-root `test/…` / `tests/…` matched neither and slipped through as a target.
+    */test/*|*/tests/*|test/*|tests/*)
+      l="$(detect_lang "$f")" || true
+      [ -n "$l" ] && SKIPPED_TEST_PATHS+=("$f")
+      continue ;;
   esac
   l="$(detect_lang "$f")" || true
   [ -z "$l" ] && continue
   if [ -n "$LANG_FILTER" ] && [ "$l" != "$LANG_FILTER" ]; then continue; fi
   printf '%s\n' "$f"
-done
+done < <(candidates | sort -u)
+
+if [ "${#SKIPPED_TEST_PATHS[@]}" -gt 0 ]; then
+  warn "skipped ${#SKIPPED_TEST_PATHS[@]} candidate(s) matching test paths:"
+  printf '    %s\n' "${SKIPPED_TEST_PATHS[@]}" >&2
+fi

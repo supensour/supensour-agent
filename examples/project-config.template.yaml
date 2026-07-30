@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/supensour/supensour-agent/master/schemas/project-config.schema.json
+# Supensour per-repo hints. Everything is optional — setting a value just skips the
+# detection step it replaces. Uncomment what you need.
+## Lines starting with `##` are maintainer notes — init-config.sh strips them when copying
+## this template to <repo>/.supensour/config/config.yaml. Everything else is copied verbatim.
+## Both review-code and create-tests copy this one file, so keep every value commented out.
+## Per-key docs and more examples: schemas/project-config.schema.json.
+
+git:
+
+  # Platform key from ~/.supensour/config/supensour.yaml → skips platform auto-detect.
+  # platform: gitlab-ce
+
+  # Env var holding this repo's API token → overrides the platform's own token_env.
+  # token_env: GITLAB_TOKEN
+
+  # Branch to diff against by default.
+  # base_branch: develop
+
+project:
+
+  # Language ruleset for both skills → skips extension sniffing.
+  # language: vue
+
+  # Test type create-tests generates: unit | integration.
+  # test_type: unit
+
+  # ── Whole-project commands — review-code's build & test gate ─────────────────
+  # No placeholders: these run the whole project, not one file.
+  # Leave them commented to auto-detect:
+  #   node     npm ci   ·  npm run build            ·  npm run test
+  #            (build and test only when package.json defines that script)
+  #   maven    —        ·  mvn -B clean compile     ·  mvn -B clean verify
+  #   gradle   —        ·  ./gradlew build -x test  ·  ./gradlew test
+
+  # Install dependencies, before the build.
+  # install_command: "yarn install --frozen-lockfile"
+
+  # Build / compile check.
+  # build_command: "yarn build"
+
+  # Whole test suite, run once the review finds nothing medium-or-higher.
+  # test_command_all: "yarn test --run"
+
+  # ── Scoped commands — create-tests, one or more specific files ───────────────
+  # Leave them commented to auto-detect: the package.json script that runs vitest
+  # (else npx vitest) · pom.xml → mvn · build.gradle → ./gradlew.
+  #
+  # Placeholders:
+  #   {spec}           test file(s), space-joined
+  #   {classes}        test class name(s), comma-joined (Spring Boot)
+  #   {coverage_args}  one scope flag per source: --coverage.include=a --coverage.include=b
+  #   {reporter_args}  where the coverage gate puts its machine-readable reporter
+  #                    (--coverage.reporter=json-summary --coverage.reportsDirectory=<tmp>);
+  #                    empty on plain runs. Leave it out and those flags get appended to the
+  #                    end of your command — which lands in the wrong place if the command
+  #                    pipes or chains, so put it where flags belong yourself.
+  #   {source}         source path(s) — safe for a single source only; for several targets
+  #                    use {coverage_args} instead
+
+  # Run the given test file(s), without coverage.
+  # test_command: "npm run test:unit -- run {spec} --coverage=false"
+
+  # Same, with coverage scoped to the source file(s) — used by the coverage gate.
+  # test_command_coverage: "npm run test:unit -- run {spec} --coverage {coverage_args} {reporter_args}"
+
+  # Ready-made pairs for other stacks (test_command, then test_command_coverage):
+  #   yarn     "yarn vitest run {spec} --coverage=false"
+  #            "yarn vitest run {spec} --coverage {coverage_args} {reporter_args}"
+  #   pnpm     "pnpm vitest run {spec} --coverage=false"
+  #            "pnpm vitest run {spec} --coverage {coverage_args} {reporter_args}"
+  #   jest     "npx jest {spec}"
+  #            "npx jest {spec} --coverage --collectCoverageFrom={source}"
+  #   maven    "mvn test -Dtest={classes}"
+  #            "mvn -q test -Dtest={classes} jacoco:report"
+  #   gradle   "./gradlew test --tests {classes}"
+  #            "./gradlew test --tests {classes} jacocoTestReport"
+  #   piped    "npm run test:unit -- run {spec} --coverage {coverage_args} {reporter_args} | tee /tmp/vitest.log"

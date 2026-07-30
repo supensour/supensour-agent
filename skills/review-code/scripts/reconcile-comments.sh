@@ -24,6 +24,9 @@
 # Prints a one-line reconcile report:
 #   ♻ Reconcile: 2 posted, 1 updated, 3 unchanged, 1 resolved (0 deleted)
 # Auth/permission failure → warn and keep the local review (never aborts hard).
+#
+# Exit codes: 0 reconcile ran (report line on stdout) · 4 no token, nothing posted ·
+#             1 usage error / platform has no reconcile support.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
@@ -42,7 +45,8 @@ PR="${POS[0]:-}"; MANIFEST="${POS[1]:-}"
 export HEAD_SHA
 
 init_platform "$OVERRIDE"
-require_token || { echo "♻ Reconcile: skipped — no token (local review kept)."; exit 0; }
+# Exit 4 = no token, nothing posted (see header). 0 always means "reconcile ran".
+require_token || { echo "♻ Reconcile: skipped — no token (local review kept)."; exit 4; }
 declare -F "${PLATFORM_TYPE}_list_prior" >/dev/null \
   || die "Platform '$PLATFORM_TYPE' has no reconcile support (list_prior). Extend platform-${PLATFORM_TYPE}.sh."
 
@@ -107,6 +111,7 @@ while IFS=$'\t' read -r file line dim title bodyfile; do
   fp="$(finding_fp "$file" "$dim" "$title")"
   CUR["$fp"]=1
   body="$(cat "$bodyfile")"; h="$(_hash12 "$body")"
+  # shellcheck disable=SC2034  # $FP is read by decorate_body in the platform libs
   FP="$fp"
   if [ -n "${P_ID[$fp]:-}" ]; then
     if [ "${P_H[$fp]}" = "$h" ]; then

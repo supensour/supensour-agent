@@ -14,15 +14,18 @@
       "properties": {
         "platform": {
           "type": "string",
-          "description": "Key into the global catalog's platform.platforms → skip platform auto-detect."
+          "description": "Key into the global catalog's platform.platforms → skip platform auto-detect.",
+          "examples": ["gitlab-ce", "github", "bitbucket"]
         },
         "token_env": {
           "type": "string",
-          "description": "Override the platform's token_env for this repo."
+          "description": "Override the platform's token_env for this repo.",
+          "examples": ["GITLAB_TOKEN", "GITHUB_TOKEN", "MY_GITLAB_TOKEN"]
         },
         "base_branch": {
           "type": "string",
-          "description": "Default diff base → skip base-branch detection."
+          "description": "Default diff base → skip base-branch detection.",
+          "examples": ["master", "main", "develop"]
         }
       }
     },
@@ -33,13 +36,69 @@
       "properties": {
         "language": {
           "type": "string",
-          "enum": ["vue", "springboot"],
+          "enum": [
+            "vue",
+            "springboot"
+          ],
           "description": "Default --lang for review-code / create-tests → skip extension sniffing."
         },
         "test_type": {
           "type": "string",
-          "enum": ["unit", "integration"],
+          "enum": [
+            "unit",
+            "integration"
+          ],
           "description": "Default --type for create-tests."
+        },
+        "install_command": {
+          "type": "string",
+          "description": "review-code: dependency install step, run before the build. UNSCOPED — no placeholders. Omit to auto-detect (package.json → `npm ci`; Maven/Gradle resolve dependencies as part of their own tasks, so there is no separate step).",
+          "examples": ["npm ci", "yarn install --frozen-lockfile", "pnpm install --frozen-lockfile"]
+        },
+        "build_command": {
+          "type": "string",
+          "description": "review-code: build/compile check. UNSCOPED — no placeholders. Omit to auto-detect (package.json `build` script → `npm run build`; pom.xml → `mvn -B clean compile`; build.gradle → `./gradlew build -x test`).",
+          "examples": [
+            "npm run build",
+            "yarn build",
+            "mvn -B clean compile",
+            "./gradlew build -x test"
+          ]
+        },
+        "test_command_all": {
+          "type": "string",
+          "description": "review-code: WHOLE test suite for the PR gate. UNSCOPED — no placeholders; use test_command / test_command_coverage for per-file runs. Omit to auto-detect (package.json `test` script → `npm run test`; pom.xml → `mvn -B clean verify`; build.gradle → `./gradlew test`).",
+          "examples": [
+            "npm run test",
+            "yarn test --run",
+            "mvn -B clean verify",
+            "./gradlew test"
+          ]
+        },
+        "test_command": {
+          "type": "string",
+          "description": "create-tests: command to run tests WITHOUT coverage.\n\nPlaceholders:\n  {spec}           test file(s), space-joined\n  {classes}        test class name(s), comma-joined (springboot)\n  {coverage_args}  ready-made scope flags, one per source\n  {reporter_args}  where the coverage gate injects its json-summary reporter (empty here)\n  {source}         source path(s), space-joined — SINGLE source only\n\nOmit to auto-detect: the package.json script running vitest → npx vitest; pom.xml → mvn; build.gradle → gradlew.",
+          "examples": [
+            "npm run test:unit -- run {spec} --coverage=false",
+            "yarn vitest run {spec} --coverage=false",
+            "pnpm vitest run {spec} --coverage=false",
+            "npx jest {spec}",
+            "mvn test -Dtest={classes}",
+            "./gradlew test --tests {classes}"
+          ]
+        },
+        "test_command_coverage": {
+          "type": "string",
+          "description": "create-tests: command to run tests WITH coverage scoped to the source file(s) — used by the coverage gate and by verification runs.\n\nSame placeholders as test_command, plus:\n  {reporter_args}  the gate substitutes its machine-readable reporter here\n                   (--coverage.reporter=json-summary --coverage.reportsDirectory=<tmp>).\n                   Leave it out and the flags get appended at the end of the command —\n                   correct only when the command ends where flags belong. A command that\n                   pipes or chains (`| tee`, `&&`) MUST place {reporter_args} itself.\n\nPrefer {coverage_args} over {source}: the gate scopes several sources in one run, and {source} would leave the extra paths as positional args (silently wrong scope).",
+          "examples": [
+            "npm run test:unit -- run {spec} --coverage {coverage_args} {reporter_args}",
+            "yarn vitest run {spec} --coverage {coverage_args} {reporter_args}",
+            "pnpm vitest run {spec} --coverage {coverage_args} {reporter_args}",
+            "npm run test:unit -- run {spec} --coverage {coverage_args} {reporter_args} | tee /tmp/vitest.log",
+            "npx jest {spec} --coverage --collectCoverageFrom={source}",
+            "mvn -q test -Dtest={classes} jacoco:report",
+            "./gradlew test --tests {classes} jacocoTestReport"
+          ]
         }
       }
     }

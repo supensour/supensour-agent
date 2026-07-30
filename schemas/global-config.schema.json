@@ -16,7 +16,8 @@
       "properties": {
         "default": {
           "type": "string",
-          "description": "Key of the default platform when auto-detect is ambiguous."
+          "description": "Key of the default platform when auto-detect is ambiguous.",
+          "examples": ["github", "gitlab-ce", "bitbucket"]
         },
         "platforms": {
           "type": "object",
@@ -40,24 +41,29 @@
         },
         "host": {
           "type": "string",
-          "description": "Base URL, e.g. https://github.com or a self-hosted host."
+          "description": "Base URL, e.g. https://github.com or a self-hosted host.",
+          "examples": ["https://github.com", "https://gitlab.example.com", "https://bitbucket.org"]
         },
         "api_version": {
           "type": "string",
-          "description": "Optional API version path segment (e.g. v4, rest/api/1.0)."
+          "description": "Optional API version path segment (e.g. v4, rest/api/1.0).",
+          "examples": ["v4", "rest/api/1.0"]
         },
         "token_env": {
           "type": "string",
-          "description": "Name of the env var holding the auth token."
+          "description": "Name of the env var holding the auth token.",
+          "examples": ["GITHUB_TOKEN", "GITLAB_TOKEN", "BITBUCKET_TOKEN"]
         },
         "token_env_alternatives": {
           "type": "array",
           "description": "Fallback env var names tried if token_env is unset.",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "examples": [["GH_TOKEN", "MY_GITHUB_TOKEN"]]
         },
         "cli": {
           "type": "string",
-          "description": "Preferred CLI tool when available (e.g. gh)."
+          "description": "Preferred CLI tool when available (e.g. gh).",
+          "examples": ["gh", "glab"]
         }
       }
     }

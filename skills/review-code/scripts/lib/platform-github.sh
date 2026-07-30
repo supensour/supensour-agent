@@ -45,7 +45,14 @@ github_post_summary() {
   payload="$(jq -n --arg b "$(decorate_body "$2")" '{body:$b}')"
   resp="$(_gh_api POST "/repos/$OWNER/$REPO/issues/$pr/comments" -d "$payload")"
   code="$(printf '%s' "$resp" | _code)"
-  [ "$code" = 201 ] && printf '%s' "$resp" | _body | jq -r '.html_url' || { warn "GitHub summary post failed (HTTP $code)"; return 1; }
+  # if/else, not `A && B || C`: with the chain form a 201 whose body lacks html_url would
+  # take the failure branch, and the caller would re-post an already-posted comment.
+  if [ "$code" = 201 ]; then
+    printf '%s' "$resp" | _body | jq -r '.html_url // empty'
+    return 0
+  fi
+  warn "GitHub summary post failed (HTTP $code)"
+  return 1
 }
 
 # github_post_inline <pr> <path> <line> <body> → review comment at line. 0=ok.
