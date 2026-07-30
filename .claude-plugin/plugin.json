@@ -1,11 +1,10 @@
 {
   "name": "supensour",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Generic, parameterized software-development workflow skills (code review, test generation). Language-agnostic and extensible.",
   "author": {
     "name": "supensour",
     "url": "https://github.com/supensour"
   },
-  "skills": "./skills/",
-  "agents": "./agents/"
+  "skills": "./skills/"
 }

@@ -159,11 +159,17 @@ Analysts return one JSON finding per line, so the orchestrator's context grows w
 contents.
 
 Agent definitions live in `agents/` (`supensour-test-analyst`, `supensour-test-writer`,
-`supensour-review-analyst` — name them `supensour-<skill-domain>-<role>`), declared via
-`"agents": "./agents/"` in `.claude-plugin/plugin.json` and `.cursor-plugin/plugin.json` (the Antigravity
-root manifest is `additionalProperties: false` — name + description only, so it can't declare them). They
-deliberately **omit** `model:` — the dispatcher passes the model, keeping the skill host-agnostic. A host
-that doesn't resolve the agent type falls back to `general-purpose` with the same prompt and `model`.
+`supensour-review-analyst` — name them `supensour-<skill-domain>-<role>`). **No manifest declares them**:
+Claude Code auto-loads `agents/`, and its `agents` field wants an agent *file* path — pointing it at a
+directory is rejected outright with `agents: Invalid input`, which invalidates the whole plugin. Setting the
+field would also *disable* the automatic scan, so every new agent would need a manifest edit. Adding an
+agent = dropping a file in `agents/`, nothing else. (Contrast `skills`, whose field does take a directory
+and is additive; the Antigravity root manifest is `additionalProperties: false` — name + description only.)
+Validator check 15 enforces the file-vs-directory shape for both fields.
+
+Agent defs deliberately **omit** `model:` — the dispatcher passes the model, keeping the skill
+host-agnostic. A host that doesn't resolve the agent type falls back to `general-purpose` with the same
+prompt and `model`.
 
 Working-tree safety: every generated spec is `git add -N`'d the moment it's written
 (`scripts/protect.sh`), and destructive git commands are banned for all roles — a stray `git clean -fd`

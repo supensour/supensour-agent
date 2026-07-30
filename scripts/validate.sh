@@ -304,6 +304,55 @@ if [ -d "$RC_LIB" ]; then
   printf '   checked\n'
 fi
 
+# --- 15. plugin manifest field shapes ---------------------------------------
+# A wrong shape here makes the host refuse the WHOLE plugin ("agents: Invalid input"),
+# so it must fail here rather than on a user's machine. Per Claude Code's schema:
+#   skills  → path to a skill DIRECTORY (or array), additive to skills/
+#   agents  → path to an agent FILE (or array of files); setting it DISABLES the
+#             automatic agents/ scan, so we omit it and let agents/ auto-load
+#   commands/hooks → same file-vs-dir distinction as agents
+sect "plugin manifest field shapes"
+if have_python; then
+  python3 - <<'PY'
+import json, sys
+from pathlib import Path
+bad = []
+FILE_FIELDS = ('agents', 'commands', 'hooks')     # value(s) must be files, not dirs
+DIR_FIELDS  = ('skills',)                         # value(s) must be directories
+for mf in ('.claude-plugin/plugin.json', '.cursor-plugin/plugin.json'):
+    p = Path(mf)
+    if not p.exists():
+        continue
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for field in FILE_FIELDS:
+        if field not in d:
+            continue                              # omitted = auto-loaded, which is what we want
+        vals = d[field] if isinstance(d[field], list) else [d[field]]
+        for v in vals:
+            if not isinstance(v, str) or v.endswith('/') or Path(v).is_dir():
+                bad.append(f'{mf}: `{field}` must be an agent/command FILE path (or a list of them), '
+                           f'not a directory — got {v!r}. Omit the field to let {field}/ auto-load.')
+            elif not Path(v).exists():
+                bad.append(f'{mf}: `{field}` points at {v!r}, which does not exist')
+    for field in DIR_FIELDS:
+        if field not in d:
+            continue
+        vals = d[field] if isinstance(d[field], list) else [d[field]]
+        for v in vals:
+            if not isinstance(v, str) or not Path(v).is_dir():
+                bad.append(f'{mf}: `{field}` must be a directory path — got {v!r}')
+for b in bad:
+    print(f'✖ {b}', file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
+  rc=$?
+  case "$rc" in
+    0) printf '   manifest field shapes valid\n' ;;
+    1) ERRORS=$((ERRORS + 1)) ;;
+    *) err "manifest-shape check crashed (exit $rc)" ;;
+  esac
+fi
+
 # --- 14. portability ---------------------------------------------------------
 # Contract: bash 4+ on Linux, macOS and Windows (Git Bash / WSL). No GNU-only flags,
 # no symlinks, no CRLF, no package manager assumed.
