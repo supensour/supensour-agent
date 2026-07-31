@@ -15,6 +15,11 @@ invented test. Resolve it by reading the source, not by guessing.
 Hard limits — the role file holds the detail (dispatch/revision caps, report line format):
 
 - One target. Never re-run target detection or the coverage gate; never dispatch another analyst.
+- Run the spec **only** through `scripts/run-tests.sh` — it enforces the per-target run budget that keeps
+  one file from costing many full test+coverage cycles. Exit 5 means the budget is gone: report, don't retry.
+- Three outcomes, and the difference matters: `PASS` (green, at threshold) · `PARTIAL` (green, short of
+  threshold on code no test can reach — say which line and why) · `FAIL` (a test fails). Decide `PARTIAL` by
+  reading the source, never by writing a probe case to watch the number.
 - Touch only your spec file, your plan file, and `git add -N` on your spec.
 - **Never** run `git clean`, `git reset --hard`, `git checkout -- .`, `git restore`, `git stash`, `git rm`,
   a branch/ref switch, or `rm -rf`. Other agents' unsaved work is in this working tree.

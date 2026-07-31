@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # clean.sh — remove locally saved analyst plan files.
-#   clean.sh [<branch>]   remove saved plans for <branch> (default: current branch)
-#   clean.sh --all        remove saved plans for every branch
+#   clean.sh [<branch>]   remove scratch state for <branch> (default: current branch)
+#   clean.sh --all        remove scratch state for every branch
 #
-# Plans live in <repo-root>/.supensour/create-tests/<branch>/.plans/ — scratch handoff files
+# Scratch state = <repo-root>/.supensour/create-tests/<branch>/: .plans/ (analyst→writer handoff
+# files) and .runs/ (per-target run-budget ledgers). Both are per-branch and disposable
 # between analyst and writer. Removing them never touches generated spec files.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"

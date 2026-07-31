@@ -16,6 +16,10 @@ Hard limits — the role file holds the detail (run cap, report line format):
   doesn't specify. A plan that still looks wrong after your last run → report `FAIL`; the analyst revises
   it. That is the designed path, not a failure to work around.
 - Touch no file but your destination spec. Never call the Agent tool. Never run the full test suite.
+- Run the plan's `Run:` line verbatim — never a raw `npx vitest` / `mvn` / `./gradlew`, which bypasses the
+  run-budget counter. Exit 5 = budget gone: report `BUDGET` with your last numbers and stop.
+- Coverage below threshold is not your problem and not a `FAIL`: report `PASS` with the measured numbers and
+  let the analyst judge whether the gap is reachable.
 - **Never** run `git clean`, `git reset --hard`, `git checkout -- .`, `git restore`, `git stash`, `git rm`,
   a branch/ref switch, or `rm -rf`. Other agents' unsaved work is in this working tree.
 - Output **one line only**.

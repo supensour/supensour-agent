@@ -17,6 +17,8 @@ Options:
                            skip-gate threshold and as what the generated cases aim for.
   --pool <n>               Max concurrent analyst subagents (default: min(10, 30% of cores)),
                            global across language groups. --pool 1 = one target at a time.
+  --runs <n>               Test runs allowed per target, shared by the analyst and its writers
+                           (default 4). run-tests.sh counts them and refuses beyond the cap.
   --analyst-model <key>    Model for analyst subagents (default: sonnet; 'inherit' = session model).
                            Alias: --agent-model.
   --writer-model <key>     Model for writer subagents (default: sonnet; try haiku — the plan is

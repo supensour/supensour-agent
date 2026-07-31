@@ -82,6 +82,7 @@ target falls through to `GENERATE` (fail-safe, not a silent skip).
    Targets (4): src/utils/money.ts, src/composables/useOrderList.js, src/components/Order.vue, src/utils/date.js
    Pool size: 3 (cores=8, cap=min(10, 30%))       # or: Pool size: 4 (--pool 4)
    Models: analyst=sonnet, writer=sonnet
+   Run budget: 4 per target (--runs to change)
    ```
 3. **Fill, then top up on every completion** — queue targets FIFO, dispatch `min(pool, queue.length)`
    analysts at once (one Agent call per target, backgrounded, `subagent_type: supensour-test-analyst`,
@@ -93,13 +94,17 @@ target falls through to `GENERATE` (fail-safe, not a silent skip).
    Repo: <repo-root>
    Invoke the skill `supensour:create-tests` with arguments:
      --executor <source-file> [--lang <lang>] [--type <type>] [--coverage <n>]
-     [--writer-model <key>] [--no-split]
+     [--writer-model <key>] [--no-split] [--runs <n>]
    You are the ANALYST for exactly this one file. Follow roles/analyst.md in that skill.
    Coverage now (from the gate, keyed): <metric>=<n> … — threshold <n> on every metric.
+   Run budget: <n> runs for this target, all roles combined, counted by run-tests.sh.
    Report back exactly one line:
-     <spec-path> | new|append | <n> cases | PASS|FAIL | <metric>=<n> …
-     …and on FAIL only, append: | <reason> | plan=<plan-path> | writers=<n>
+     <spec-path> | new|append | <n> cases | PASS|PARTIAL|FAIL | <metric>=<n> …
+     …on PARTIAL append: | uncovered=<file>:<line> <why> | writers=<n>
+     …on FAIL append:    | <reason> | plan=<plan-path> | writers=<n>
    ```
+   `PARTIAL` = tests green but a metric can't reach the threshold because the remaining code isn't
+   reachable by a test. It is a delivered spec: report it, never re-dispatch it.
 5. **Protect after each completion**: `bash "<skill-dir>/scripts/protect.sh" <reported-spec>`.
    `--pool 1` with a single target → still dispatch the analyst (keeps rules out of your context).
 
@@ -112,9 +117,17 @@ target falls through to `GENERATE` (fail-safe, not a silent skip).
    Any `✖ MISSING` → report the incident (which files) and re-dispatch those targets (once).
    Any `⚠ UNPROTECTED` → list those specs in the summary: they exist but stay untracked (gitignored test
    dir), so a `git clean` elsewhere can still delete them.
-2. Summary table: source → spec → cases → PASS/FAIL → coverage, plus counts of skipped-by-gate and failed
-   targets. For failed targets include the plan path + writer count the analyst reported, so the run can
-   be debugged without re-reading anything. Do not print spec bodies.
+2. Summary table: source → spec → cases → `PASS`/`PARTIAL`/`FAIL` → coverage, plus counts of
+   skipped-by-gate, partial and failed targets. Three outcomes, three meanings:
+   - `PASS` — green and at threshold.
+   - `PARTIAL` — green, below threshold on code no test can reach. List each one's `uncovered=<file>:<line>`
+     and reason. **Not a failure**: don't re-dispatch it, don't fold it into the failed count, and don't
+     suggest a re-run to "finish" it — a later run would chase the same unreachable line.
+   - `FAIL` — a test fails or the spec couldn't be produced. Include the plan path + writer count the
+     analyst reported, so the run can be debugged without re-reading anything.
+
+   Do not print spec bodies. If any analyst reported a budget stop, say so once:
+   `⚠ N target(s) stopped at the run budget (4) — raise with --runs <n> if the gap looks coverable.`
 3. Final user-facing line: `bash "<skill-dir>/scripts/watermark.sh" --banner`.
 
 ## Don'ts

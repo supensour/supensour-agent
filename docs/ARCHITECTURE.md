@@ -148,6 +148,18 @@ attempt, transcribes the analyst's plan):
 Plans are files under `.supensour/create-tests/<branch>/.plans/`, so the orchestrator's context never grows
 with target count; inter-role reports are single fixed-format lines.
 
+**Run budget.** Each role can only see its own cap (writer: 2 runs; analyst: 2 dispatches, 1 revision), so
+the per-target *total* was unbounded — in practice one file cost more than five full test+coverage cycles.
+`scripts/run-tests.sh` is therefore the single chokepoint: the plan's `Run:` line is that command, and it
+keeps a shared ledger at `.supensour/create-tests/<branch>/.runs/<target>.count`, refusing past `--runs <n>`
+(default 4) with exit 5. Prompt-level caps can't compose across independent agents; a counter on disk can.
+
+**Three outcomes, not two.** A target ends `PASS` (green, at threshold), `PARTIAL` (green, but a metric
+can't reach the threshold because the remaining code is unreachable — reported with `uncovered=<file>:<line>`
+and why) or `FAIL` (a test fails or no spec was produced). Without `PARTIAL`, unreachable code forces a lie:
+`PASS` claims a bar was met, `FAIL` sends the next run chasing a number no test can move — and it was that
+second option that drove probe-and-revert cycles through the run budget.
+
 **review-code** — orchestrator → analyst (one per changed file, via `--executor <file>`):
 
 | Role | File | Reads | Model |

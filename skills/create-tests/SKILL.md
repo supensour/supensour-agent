@@ -1,7 +1,7 @@
 ---
 name: create-tests
 description: Generate tests for changed or specified source files across languages (Vue/Vitest, Spring Boot/JUnit5, extensible). Per-language conventions and test types (unit now; integration later). Writes minimum-viable specs following the project's naming/location conventions and can run them with scoped coverage. Use for "write tests for this", "create unit tests", "add test coverage for my diff".
-argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <n>] [--pool <n>] [--analyst-model <key>] [--writer-model <key>] [--no-split] [--executor <file>] [--explain] [--clean <branch>] [--clean-all] [--help]"
+argument-hint: "[--lang <key>] [--type unit|integration] [--files <glob>] [--base <branch>] [--coverage <n>] [--pool <n>] [--runs <n>] [--analyst-model <key>] [--writer-model <key>] [--no-split] [--executor <file>] [--explain] [--clean <branch>] [--clean-all] [--help]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent, Skill
 ---
 
@@ -25,6 +25,7 @@ conventions. Supports Vue (Vitest) and Spring Boot (JUnit 5), extensible to any 
 /create-tests --type unit                  # test type (default; integration = later)
 /create-tests --coverage 90                # numeric gate threshold, every metric (default 100)
 /create-tests --pool 4                     # max concurrent analysts (default: min(10, 30% of cores))
+/create-tests --runs 6                     # test runs allowed per target, all roles (default 4)
 /create-tests --analyst-model sonnet       # model for analysts (default: sonnet; alias --agent-model)
 /create-tests --writer-model haiku         # model for writers (default: sonnet)
 /create-tests --no-split                   # analyst writes the spec itself, no writer hop
@@ -55,6 +56,7 @@ touches generated specs.
 | `--base <branch>` | auto-detect | Diff base for changed-file detection (`origin/HEAD` → `main`/`master`/`develop`) |
 | `--coverage <n>` | `100` | **Numeric only.** The coverage bar, applied to **every** metric (vue: statements/branches/functions/lines; springboot: instructions/branches/methods/lines). Used both as the skip-gate threshold and as what the analyst writes cases to reach |
 | `--pool <n>` | `min(10, floor(cores * 0.3))`, min 1 | Max concurrent analyst subagents, global across language groups. `1` = one target at a time |
+| `--runs <n>` | `4` | Test runs allowed **per target**, counted across the analyst and every writer by `scripts/run-tests.sh`. Prevents a target from costing many full test+coverage cycles; raise it when a real gap needs more attempts |
 | `--analyst-model <key>` | `sonnet` | Model for analyst subagents. `inherit` = session model. Alias: `--agent-model` |
 | `--writer-model <key>` | `sonnet` | Model for writer subagents. `inherit` = session model. Cheaper tiers (`haiku`) are viable — the plan is near-transcription |
 | `--no-split` | off | Skip the writer hop: the analyst writes the spec itself at `--analyst-model` |
@@ -90,6 +92,26 @@ an unquoted `{a,b}` is expanded by your shell into separate arguments, which sti
 bash "<skill-dir>/scripts/test-command.sh" <lang> coverage --spec <spec>... --source <src>...  # print it
 bash "<skill-dir>/scripts/run-tests.sh"    <lang> <spec> [--coverage <source-file>]            # run it
 ```
+
+`run-tests.sh` is the **only** way a spec is run while generating — the plan's `Run:` line is that command.
+It keeps a per-target ledger under `.supensour/create-tests/<branch>/.runs/` and refuses past `--runs <n>`
+(default 4) with exit 5, because each role can only see its own cap (writer: 2 runs, analyst: 2 dispatches)
+and the per-target total was otherwise unbounded. A raw `npx vitest` / `mvn` invocation bypasses the counter
+— don't.
+
+## Outcomes
+
+Every target ends as exactly one of these, and the difference matters to the next run:
+
+| Outcome | Tests | Coverage | Meaning |
+|---|---|---|---|
+| `PASS` | green | at threshold | Done |
+| `PARTIAL` | **green** | short of threshold | The remaining code is **not reachable by a test** — an impossible guard, a defensive `default:`, a platform-specific path. Reported with `uncovered=<file>:<line>` + why. A delivered spec, never re-dispatched |
+| `FAIL` | failing/erroring | — | A test fails, or the spec couldn't be produced. Reported with the reason, failing case names and the plan path |
+
+`PARTIAL` exists so unreachable code isn't laundered into either lie: `PASS` would claim a bar was met,
+`FAIL` would send the next run chasing a number no test can move. The analyst decides it **by reading the
+source** — never by writing a probe case to see whether the number budges, then reverting it.
 Resolution order: `project.test_command` / `project.test_command_coverage` in
 `<repo>/.supensour/config/config.yaml` → the `package.json` script that runs vitest (`test:unit`,
 `test:vitest`, `test`, else any script mentioning vitest) → `npx vitest run`; for springboot, `pom.xml` →
